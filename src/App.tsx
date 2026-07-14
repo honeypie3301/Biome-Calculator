@@ -523,7 +523,36 @@ export default function App() {
   const [xAxisDim, setXAxisDim] = useState<string>("temp");
   const [yAxisDim, setYAxisDim] = useState<string>("hum");
   const [generationAlgorithm, setGenerationAlgorithm] = useState<"euclidean" | "strict">("euclidean");
-  const [simulationSeed, setSimulationSeed] = useState<number>(42);
+  const [seedInput, setSeedInput] = useState<string>("42");
+
+  // Derive stable seed mimicking Minecraft/Java's parsing and hashing rules exactly
+  const simulationSeed = useMemo(() => {
+    const trimmed = seedInput.trim();
+    if (!trimmed) return 0;
+
+    // 1. If it's a valid integer, try parsing as a 64-bit long (matching Java's behavior)
+    if (/^[+-]?\d+$/.test(trimmed)) {
+      try {
+        const big = BigInt(trimmed);
+        const MIN_LONG = -9223372036854775808n;
+        const MAX_LONG = 9223372036854775807n;
+        if (big >= MIN_LONG && big <= MAX_LONG) {
+          // Inside Java long bounds: use the numeric value (cast safely to standard JS number)
+          return Number(big);
+        }
+      } catch (e) {
+        // Fall through to String.hashCode on error
+      }
+    }
+
+    // 2. Otherwise (non-integers, decimals, or out-of-bounds numbers), compute Java's String.hashCode()
+    let hash = 0;
+    for (let i = 0; i < trimmed.length; i++) {
+      hash = ((hash << 5) - hash) + trimmed.charCodeAt(i);
+      hash |= 0; // Convert to a 32-bit signed integer
+    }
+    return hash;
+  }, [seedInput]);
 
   // Chunkbase 2D World Map settings
   const [mapMode, setMapMode] = useState<"slice" | "chunkbase">("slice");
@@ -1555,6 +1584,40 @@ export default function App() {
                 <Globe className="h-3.5 w-3.5" />
                 Chunkbase 2D Map
               </button>
+            </div>
+
+            {/* World Seed Input (Applies to both maps) */}
+            <div className="bg-[#110d0d] border border-[#201414] p-3.5 rounded-lg mb-4 text-xs">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[10px] text-[#ff7043] font-bold uppercase tracking-wider block">
+                  World Generation Seed
+                </label>
+                {seedInput.trim() !== simulationSeed.toString() && (
+                  <span className="text-[9px] font-mono text-[#8c8779] bg-[#1a1313] px-1.5 py-0.5 rounded border border-[#2c1d1a]" title="This is the 32-bit integer Minecraft calculates by hashing your text input">
+                    Hashed: {simulationSeed}
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={seedInput}
+                  onChange={(e) => setSeedInput(e.target.value)}
+                  placeholder="Enter a Minecraft seed (e.g. 42 or gargamel)"
+                  className="flex-1 bg-[#050505] border border-[#3e2723] rounded px-3 py-1.5 text-white text-xs font-mono focus:border-[#ff7043] focus:outline-none placeholder-[#4d4a41]"
+                />
+                <button
+                  onClick={() => {
+                    const randomSeed = Math.floor(Math.random() * 99999999) + 1;
+                    setSeedInput(randomSeed.toString());
+                  }}
+                  className="px-3 py-1.5 bg-[#1a1111] border border-[#5c1414] hover:border-[#ff7043]/40 rounded text-[#ff7043] transition flex items-center gap-1 shrink-0 font-medium font-mono text-[11px]"
+                  title="Randomize seed"
+                >
+                  <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-pulse" />
+                  Random
+                </button>
+              </div>
             </div>
 
             {mapMode === "slice" ? (
