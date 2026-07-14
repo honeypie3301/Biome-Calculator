@@ -1,0 +1,546 @@
+__FORCETOC__
+<div class="backwoods-wiki-container" style="max-width: 1000px; margin: 0 auto; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'SF Pro Text', 'SF Pro Display', 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #a4a090; background-color: #080808; padding: 40px 30px; box-sizing: border-box; border: 1px solid #1a1414; line-height: 1.7;">
+
+<!-- INTRODUCTION -->
+<div style="border-left: 2px solid #5c1414; padding-left: 20px; margin-bottom: 40px; color: #c4bfa5; font-style: italic; font-size: 1.05em; line-height: 1.8;">
+The Backwoods is not empty. Several entities inhabit its shifting dimensions, each possessing distinct behaviors, specialized AI routines, and varied threat profiles.
+</div>
+
+<div style="background: #0d0909; border: 1px solid #201414; border-left: 2px solid #5c1414; padding: 16px; margin-bottom: 40px; color: #9c9788; font-size: 0.9em; line-height: 1.7;">
+<strong style="color: #c4bfa5; text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.05em; display: block; margin-bottom: 8px;">Universal Faction Target Filters</strong>
+To maintain focus on active threats, Backwoods entities check targets before engaging. In standard states, their AI automatically filters out and Ignores the following entities:
+<ul style="margin: 6px 0 0 0; padding-left: 18px; list-style-type: square; color: #8c8779;">
+    <li style="margin-bottom: 4px;">Other <strong>Rot/Woodbound entities</strong> (faction alignment)</li>
+    <li style="margin-bottom: 4px;"><strong>Villagers</strong> (passive town residents)</li>
+    <li style="margin-bottom: 4px;"><strong>Ambient Creatures</strong> (such as bats)</li>
+    <li style="margin-bottom: 4px;"><strong>Animals &amp; Slimes</strong> (passive and basic terrestrial wildlife)</li>
+    <li style="margin-bottom: 0;"><strong>Water Animals &amp; Fishes</strong> (such as fish, squids, and axolotls)</li>
+</ul>
+</div>
+
+<h2 style="color: #eaeaea; border-bottom: 1px solid #301414; padding-bottom: 8px; margin-top: 50px; margin-bottom: 25px; font-size: 1.4em; letter-spacing: 0.15em; text-transform: uppercase; font-weight: normal;">Woodbound Entities</h2>
+
+<!-- ==========================================
+     THE SPLINTER
+     ========================================== -->
+<h3 style="color: #c4bfa5; margin-top: 40px; margin-bottom: 12px; font-size: 1.15em; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 500;">The Splinter</h3>
+<p style="margin-bottom: 15px; font-size: 0.95em;">The primary threat of the Backwoods. A gaunt wooden figure that hunts the player through extreme patience and persistence. Every Splinter is assigned a dynamic personality profile upon spawning—half behave as stealthy stalkers, while the other half act as pure pursuers that advance directly toward the player whenever unwatched.</p>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">AI Personality Profiles</h4>
+<ul style="margin: 0 0 20px 0; padding-left: 18px; list-style-type: square; line-height: 1.7; font-size: 0.9em; color: #9c9788;">
+    <li style="margin-bottom: 8px;">'''Stalker / Hunt Personality:''' Cycles systematically through three behavioral phases. In its ''Silent phase'', it stands completely motionless, observing. In its ''Stalk phase'', it follows at a distance, breaking line of sight and pausing occasionally to watch. In its ''Hunt phase'', it pursues the player aggressively. Following a hunt, it retreats into a forced silent cooldown before repeating the cycle.</li>
+    <li style="margin-bottom: 0;">'''Angel Personality:''' Behaves more directly. It aggressively travels toward the player whenever unwatched and freezes instantly the moment the player establishes eye contact, featuring no phase cycling.</li>
+</ul>
+
+<div style="background: #0d0909; border: 1px solid #321616; border-left: 2px solid #9e2a2a; padding: 16px; margin: 20px 0; color: #cfbfa8; font-size: 0.9em;">
+<strong style="color: #9e2a2a; text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">The Rage Mechanic:</strong> Both personality types freeze under direct sight. However, staring at a Splinter for too long causes it to enter a state of rage—overriding its freeze condition and chasing the player regardless of eye contact. Striking a Splinter lowers this visual threshold, making it enrage faster with each consecutive hit.
+</div>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Global Alert Radii (On Death)</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">Killing a "woodbound" entity triggers an immediate reaction from nearby kin. When a woodbound entity dies, it alerts all other woodbound entities within a specific scan radius, forcing them into a state of rage (<code>isEnraged</code>) for a forced hunt lasting '''600 ticks'''. The alert radius scales dynamically based on world difficulty settings:</p>
+<ul style="margin: 0 0 20px 0; padding-left: 18px; list-style-type: square; line-height: 1.7; font-size: 0.9em; color: #9c9788;">
+    <li style="margin-bottom: 8px;">'''Hard Difficulty:''' The radius expands dynamically to match the server's player list view distance (multiplied by 16 blocks), defaulting to a massive '''64-block radius''' if uncalculated.</li>
+    <li style="margin-bottom: 8px;">'''Normal Difficulty:''' Fixed at a '''40-block radius'''.</li>
+    <li style="margin-bottom: 0;">'''Easy / Other Difficulties:''' Fixed at a '''24-block radius'''.</li>
+</ul>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Environmental Navigation &amp; Mitigation</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">Splinters are highly adaptive. If a player builds vertically to escape, the Splinter will build blocks upward to follow. If the player crosses a ravine, it will bridge across. It actively breaks blocks separating it from its target, though harder materials significantly reduce its mining speed. At advanced rot stages, it loses all building and bridging capabilities.</p>
+<p style="margin-bottom: 15px; font-size: 0.95em;">Carrying an '''Ash-Rose''' causes a Splinter to halt entirely, and planting one nearby freezes all Splinters within its active range. The item wilts over time when held in an inventory slot.</p>
+
+<div style="background: #0d0909; border: 1px solid #321616; border-left: 2px solid #9e2a2a; padding: 16px; margin: 20px 0; color: #cfbfa8; font-size: 0.9em;">
+<strong style="color: #9e2a2a; text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">Dimensional Pull:</strong> A rare subset of Splinters (10% spawn rate) possess the capability to pull players directly into The Grain dimension upon inflicting damage, carrying a 10% trigger chance per hit.
+</div>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Spawning Brackets &amp; Exclusion Zones</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">To prevent global entity over-congestion, Splinters utilize dynamic '''Exclusion Zones'''—safety cuboids around their spawn coordinates where other Splinters cannot generate. These zones compress as world progression time increases, causing threats to feel denser as time passes.</p>
+
+<table class="article-table" style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.9em; border: 1px solid #201414; background: #0c0c0c; margin-bottom: 30px;">
+    <tr style="border-bottom: 1px solid #301414; background: #120c0c;">
+        <th style="padding: 10px 14px; text-align: left; color: #8e8375; font-size: 0.8em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;">Progression Time Bracket</th>
+        <th style="padding: 10px 14px; text-align: center; color: #8e8375; font-size: 0.8em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500; width: 20%;">System Radius Value</th>
+        <th style="padding: 10px 14px; text-align: left; color: #8e8375; font-size: 0.8em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;">Exclusion Zone Clear Area Required</th>
+    </tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 10px 14px; color: #c4bfa5; font-weight: 500;">0 – 4,000 Ticks</td><td style="text-align: center; color: #9c9788;">128</td><td style="padding: 10px 14px; color: #9c9788;"><strong style="color: #c4bfa5;">64 Blocks</strong> (Total 128×128×128 volume clear around spawn)</td></tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 10px 14px; color: #c4bfa5; font-weight: 500;">4,001 – 7,500 Ticks</td><td style="text-align: center; color: #9c9788;">112</td><td style="padding: 10px 14px; color: #9c9788;"><strong style="color: #c4bfa5;">56 Blocks</strong> (Total 112×112×112 volume clear)</td></tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 10px 14px; color: #c4bfa5; font-weight: 500;">7,501 – 11,000 Ticks</td><td style="text-align: center; color: #9c9788;">96</td><td style="padding: 10px 14px; color: #9c9788;"><strong style="color: #c4bfa5;">48 Blocks</strong> (Total 96×96×96 volume clear)</td></tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 10px 14px; color: #c4bfa5; font-weight: 500;">11,001 – 17,000 Ticks</td><td style="text-align: center; color: #9c9788;">72</td><td style="padding: 10px 14px; color: #9c9788;"><strong style="color: #c4bfa5;">36 Blocks</strong> (Total 72×72×72 volume clear)</td></tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 10px 14px; color: #c4bfa5; font-weight: 500;">17,001 – 20,000 Ticks</td><td style="text-align: center; color: #9c9788;">48</td><td style="padding: 10px 14px; color: #9c9788;"><strong style="color: #c4bfa5;">24 Blocks</strong> (Total 48×48×48 volume clear)</td></tr>
+    <tr><td style="padding: 10px 14px; color: #c4bfa5; font-weight: 500;">20,001+ Ticks</td><td style="text-align: center; color: #9c9788;">32</td><td style="padding: 10px 14px; color: #9c9788;"><strong style="color: #c4bfa5;">16 Blocks</strong> (Total 32×32×32 volume clear)</td></tr>
+</table>
+
+<h5 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.02em; font-weight: 500;">Loot Drops</h5>
+<table class="article-table" style="width: 300px; border-collapse: collapse; margin: 15px 0; font-size: 0.9em; border: 1px solid #201414; background: #0c0c0c; margin-bottom: 30px;">
+    <tr style="border-bottom: 1px solid #301414; background: #120c0c;"><th style="padding: 8px 12px; text-align: left; color: #8e8375; font-size: 0.8em; letter-spacing: 0.1em; text-transform: uppercase;">Item Drop</th><th style="text-align: right; padding: 8px 12px; color: #8e8375; font-size: 0.8em; letter-spacing: 0.1em; text-transform: uppercase;">Chance</th></tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 8px 12px; color: #9c9788;">Stick</td><td style="text-align: right; padding: 8px 12px; color: #9c9788;">42.86%</td></tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 8px 12px; color: #9c9788;">Seep</td><td style="text-align: right; padding: 8px 12px; color: #9c9788;">9.52%</td></tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 8px 12px; color: #c4bfa5;">Splinter Shard</td><td style="text-align: right; padding: 8px 12px; color: #c4bfa5;">4.76%</td></tr>
+    <tr><td style="padding: 8px 12px; color: #70685c; font-style: italic;">Nothing</td><td style="text-align: right; padding: 8px 12px; color: #70685c;">42.86%</td></tr>
+</table>
+
+<!-- ==========================================
+     LOG SPLINTER
+     ========================================== -->
+<h3 style="color: #c4bfa5; margin-top: 40px; margin-bottom: 12px; font-size: 1.15em; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 500;">Log Splinter</h3>
+<p style="margin-bottom: 15px; font-size: 0.95em;">A heavier log-skinned variant of the standard Splinter possessing elevated health reserves and a distinct dropset. It follows identical baseline behavior templates, pathfinding rules, and global difficulty-based kinship enrage triggers on death as regular Splinters.</p>
+<p style="margin-bottom: 15px; font-size: 0.95em;">Log Splinters mimic local forestry elements, showing a dramatic increase in relative population density. Late game scenarios can cause these entities to pack closely together.</p>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Spawning Brackets &amp; Exclusion Zones</h4>
+<table class="article-table" style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.9em; border: 1px solid #201414; background: #0c0c0c; margin-bottom: 30px;">
+    <tr style="border-bottom: 1px solid #301414; background: #120c0c;">
+        <th style="padding: 10px 14px; text-align: left; color: #8e8375; font-size: 0.8em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;">Progression Time Bracket</th>
+        <th style="padding: 10px 14px; text-align: center; color: #8e8375; font-size: 0.8em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500; width: 20%;">System Radius Value</th>
+        <th style="padding: 10px 14px; text-align: left; color: #8e8375; font-size: 0.8em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;">Exclusion Zone Clear Area Required</th>
+    </tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 10px 14px; color: #c4bfa5; font-weight: 500;">0 – 4,000 Ticks</td><td style="text-align: center; color: #9c9788;">144</td><td style="padding: 10px 14px; color: #9c9788;"><strong style="color: #c4bfa5;">72 Blocks</strong> (Total 144×144×144 volume clear around spawn)</td></tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 10px 14px; color: #c4bfa5; font-weight: 500;">4,001 – 7,500 Ticks</td><td style="text-align: center; color: #9c9788;">128</td><td style="padding: 10px 14px; color: #9c9788;"><strong style="color: #c4bfa5;">64 Blocks</strong> (Total 128×128×128 volume clear)</td></tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 10px 14px; color: #c4bfa5; font-weight: 500;">7,501 – 11,000 Ticks</td><td style="text-align: center; color: #9c9788;">112</td><td style="padding: 10px 14px; color: #9c9788;"><strong style="color: #c4bfa5;">56 Blocks</strong> (Total 112×112×112 volume clear)</td></tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 10px 14px; color: #c4bfa5; font-weight: 500;">11,001 – 17,000 Ticks</td><td style="text-align: center; color: #9c9788;">80</td><td style="padding: 10px 14px; color: #9c9788;"><strong style="color: #c4bfa5;">40 Blocks</strong> (Total 80×80×80 volume clear)</td></tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 10px 14px; color: #c4bfa5; font-weight: 500;">17,001 – 20,000 Ticks</td><td style="text-align: center; color: #9c9788;">56</td><td style="padding: 10px 14px; color: #9c9788;"><strong style="color: #c4bfa5;">28 Blocks</strong> (Total 56×56×56 volume clear)</td></tr>
+    <tr><td style="padding: 10px 14px; color: #c4bfa5; font-weight: 500;">20,001+ Ticks</td><td style="text-align: center; color: #9c9788;">40</td><td style="padding: 10px 14px; color: #9c9788;"><strong style="color: #c4bfa5;">20 Blocks</strong> (Total 40×40×40 volume clear)</td></tr>
+</table>
+
+<h5 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.02em; font-weight: 500;">Loot Drops</h5>
+<table class="article-table" style="width: 300px; border-collapse: collapse; margin: 15px 0; font-size: 0.9em; border: 1px solid #201414; background: #0c0c0c; margin-bottom: 30px;">
+    <tr style="border-bottom: 1px solid #301414; background: #120c0c;"><th style="padding: 8px 12px; text-align: left; color: #8e8375; font-size: 0.8em; letter-spacing: 0.1em; text-transform: uppercase;">Item Drop</th><th style="text-align: right; padding: 8px 12px; color: #8e8375; font-size: 0.8em; letter-spacing: 0.1em; text-transform: uppercase;">Chance</th></tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 8px 12px; color: #9c9788;">Rotten Stick</td><td style="text-align: right; padding: 8px 12px; color: #9c9788;">30%</td></tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 8px 12px; color: #9c9788;">Rotten Oak Planks</td><td style="text-align: right; padding: 8px 12px; color: #9c9788;">15%</td></tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 8px 12px; color: #9c9788;">Rotten Oak Log</td><td style="text-align: right; padding: 8px 12px; color: #9c9788;">10%</td></tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 8px 12px; color: #c4bfa5;">Splinter Shard</td><td style="text-align: right; padding: 8px 12px; color: #c4bfa5;">3%</td></tr>
+    <tr><td style="padding: 8px 12px; color: #70685c; font-style: italic;">Nothing</td><td style="text-align: right; padding: 8px 12px; color: #70685c;">35%</td></tr>
+</table>
+
+<!-- ==========================================
+     BLINDSPOT SPLINTER
+     ========================================== -->
+<h3 style="color: #c4bfa5; margin-top: 40px; margin-bottom: 12px; font-size: 1.15em; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 500;">Blindspot Splinter</h3>
+<p style="margin-bottom: 15px; font-size: 0.95em;">Behaves identically to standard Splinters but leverages a unique visual evasion technique: '''it turns completely invisible whenever viewed through the third-person front camera perspective.''' Proximal Ash-Roses wilt significantly faster when held near a Blindspot Splinter. Like other woodbound entities, its death alerts nearby kin via the global difficulty-based radius system.</p>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Spawning Mechanics &amp; Environmental Demands</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">Blindspot Splinters generate under strict architectural constraints. They require solid base blocks beneath them; they cannot spawn if the supporting coordinate is empty, and in specific target biomes, the floor block must be capable of fully occluding light (<code>canOcclude</code>).</p>
+<p style="margin-bottom: 15px; font-size: 0.95em;">Their underlying exclusion zones alter drastically depending on the current biome:</p>
+<ul style="margin: 0 0 20px 0; padding-left: 18px; list-style-type: square; line-height: 1.7; font-size: 0.9em; color: #9c9788;">
+    <li style="margin-bottom: 8px;">'''Labyrinthine Grids Biome:''' Spawns with a rigid, high-clearance exclusion zone radius of '''192 Blocks'''.</li>
+    <li style="margin-bottom: 8px;">'''Pillar Thicket Biome:''' Spawns with a rigid, high-clearance exclusion zone radius of '''192 Blocks'''.</li>
+    <li style="margin-bottom: 8px;">'''Uniform Grain Biome:''' Generates highly spread out, requiring a massive exclusion zone radius of '''1000 Blocks'''.</li>
+    <li style="margin-bottom: 0;">'''The Dead Grain Biome (Sub-Strata Dimension):''' Spawns strictly inside an altitude window between Y-levels '''162 and 318'''. Its active population profile compresses dynamically based on total ticks spent by the player inside the dimension (<code>sub_strata_time</code>), forcing severe compaction over time:
+        <ul style="margin: 8px 0 0 0; padding-left: 18px; list-style-type: circle; line-height: 1.6; color: #8c8779;">
+            <li style="margin-bottom: 4px;">'''0 – 1,000 Ticks:''' Exclusion zone radius of '''120 Blocks''' (120×120×120 clear space).</li>
+            <li style="margin-bottom: 4px;">'''1,001 – 3,750 Ticks:''' Exclusion zone radius compresses to '''77 Blocks'''.</li>
+            <li style="margin-bottom: 4px;">'''3,751 – 5,500 Ticks:''' Exclusion zone radius compresses to '''58 Blocks'''.</li>
+            <li style="margin-bottom: 4px;">'''5,501 – 8,500 Ticks:''' Exclusion zone radius compresses to '''42 Blocks'''.</li>
+            <li style="margin-bottom: 4px;">'''8,501 – 10,000 Ticks:''' Exclusion zone radius compresses to '''28 Blocks'''.</li>
+            <li style="margin-bottom: 0;">'''10,001+ Ticks:''' Safety boundary bottoms out at a suffocating '''16 Blocks'''.</li>
+        </ul>
+    </li>
+</ul>
+
+<!-- ==========================================
+     PETRIFIED LOG SPLINTER
+     ========================================== -->
+<h3 style="color: #c4bfa5; margin-top: 40px; margin-bottom: 12px; font-size: 1.15em; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 500;">Petrified Log Splinter</h3>
+<p style="margin-bottom: 15px; font-size: 0.95em;">A heavier, calcified variant of the Splinter lineage adapted exclusively to the dense forests of the Petrified Weald. It travels slower than its surface counter-parts but is significantly more durable and hazardous in direct combat. It utilizes standard predatory visual checks, freezing under direct player gaze and pursuing when sightlines break. Its dense calcified armor makes it a highly resilient physical obstacle, and killing one triggers a regional enrage on local kin based on the global difficulty-based radius system.</p>
+
+<!-- ==========================================
+     OTHER ENTITIES SECTION
+     ========================================== -->
+<h2 style="color: #eaeaea; border-bottom: 1px solid #301414; padding-bottom: 8px; margin-top: 50px; margin-bottom: 25px; font-size: 1.4em; letter-spacing: 0.15em; text-transform: uppercase; font-weight: normal;">Other Entities</h2>
+<p style="font-size: 0.95em; font-style: italic; color: #c4bfa5; margin-bottom: 15px;">Note: All entities listed below are architecturally classified within the woodbound species bracket and interface completely with regional alert routines.</p>
+
+<!-- ==========================================
+     THE HOLLOW
+     ========================================== -->
+<h3 style="color: #c4bfa5; margin-top: 40px; margin-bottom: 12px; font-size: 1.15em; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 500;">The Hollow</h3>
+<p style="margin-bottom: 15px; font-size: 0.95em;">A predatory stalking entity that never pursues directly. Instead, it observes intently from long distances, teleports incrementally closer when unnoticed, and vanishes instantly if it sustains an incoming attack.</p>
+
+<!-- ==========================================
+     STILT WALKER
+     ========================================== -->
+<h3 style="color: #c4bfa5; margin-top: 40px; margin-bottom: 12px; font-size: 1.15em; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 500;">Stilt Walker (Stilt-Stalker)</h3>
+<p style="margin-bottom: 15px; font-size: 0.95em;">Remains perfectly still initially, silently watching from afar. Prolonged visual contact activates it, causing it to advance toward the target while maintaining eye contact. It shatters weaker block materials in its path, rendering concealment strategies unreliable. Throughout its combat and stalking cycle, it locks its gaze perfectly onto its target, continually rotating its head and body to maintain unyielding eye contact even after teleporting.</p>
+
+<div style="background: #0d0909; border: 1px solid #321616; border-left: 2px solid #9e2a2a; padding: 16px; margin: 20px 0; color: #cfbfa8; font-size: 0.9em;">
+<strong style="color: #9e2a2a; text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">Punishment & Stalk Cycle:</strong> Remaining proximal or tracked for too long triggers an event; looking directly at it inflicts temporary blindness (60 ticks) and spawns hostile Blindspot Splinters nearby shortly before the entity teleports away.
+</div>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Predictive Dodging</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">The Stilt Walker possesses lightning-fast defensive instincts. When a nearby survival mode player (within 3.2 blocks) attempts to swing a weapon, the Stilt Walker predictively dodges on the very same frame: playing an alert sound, blinding the attacker, summoning hostile Splinters, and instantly teleporting away.</p>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Circular Reinforcements</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">Whenever the Stilt Walker summons reinforcements (either on incoming damage, predictive dodge, or stalk cycle conclusion), it spawns Blindspot Splinters in a perfect <strong>circular shape around the attacker</strong> (at a radius of 3.2 blocks) with evenly distributed angles to form an inescapable wooden cage of claws.</p>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Spawn Grace Period (Anti-Insta-Trigger)</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">To preserve its ominous theme of watching from afar, the Stilt Walker is equipped with a strict spawn grace protection system. For the first <strong>20 ticks (1 second)</strong> after spawning, it is completely immune to triggering predictive dodging or incoming damage reactions. Furthermore, the final stalking/punishment sequence cannot terminate unless it has been alive for at least <strong>60 ticks (3 seconds)</strong>, preventing immediate teleportation, blinding, or reinforcement summons when placed close to the player.</p>
+
+<!-- ==========================================
+     THE ASH-WEAVER
+     ========================================== -->
+<h3 style="color: #c4bfa5; margin-top: 40px; margin-bottom: 12px; font-size: 1.15em; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 500;">The Ash-Weaver</h3>
+<p style="margin-bottom: 15px; font-size: 0.95em;">A completely passive wandering entity that roams the Backwoods biome floors, generating Ash-Rose blocks continuously along its path. It does not possess any offensive capabilities. Players can tail this entity to systematically harvest an abundant supply of defensive Ash-Roses.</p>
+
+<!-- ==========================================
+     LIGNUM GIGAS
+     ========================================== -->
+<h3 style="color: #c4bfa5; margin-top: 40px; margin-bottom: 12px; font-size: 1.15em; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 500;">Lignum Gigas</h3>
+<p style="margin-bottom: 15px; font-size: 0.95em;">A massive, stationary bio-mechanical behemoth standing roughly 80 blocks tall. Constructed entirely from interlocking oak planks with six monumental appendages, its design profile heavily channels the properties of the ''Coelum Carnis'' organism. It possesses exceptional health regeneration loops and yields immense pools of experience upon destruction.</p>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Active Defense Sequences</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">While fundamentally immobile, striking the entity forces an instantaneous transition into an active defense cycle, initiating several aggressive local sub-routines:</p>
+<ul style="margin: 0 0 20px 0; padding-left: 18px; list-style-type: square; line-height: 1.7; font-size: 0.9em; color: #9c9788;">
+    <li style="margin-bottom: 8px;">'''Sinking Logic:''' Upon its very first combat activation, it fractures all surrounding block matrices across a 9-block radius beneath its base and sinks exactly 5 blocks into the floor terrain to anchor its mass. It does not repeat this step on subsequent alerts.</li>
+    <li style="margin-bottom: 8px;">'''Radial Flinging:''' Every few ticks, it sweeps a 28-block area around its core. Any player characters or living entities caught within this sweep are immediately thrown backward and launched high into the air.</li>
+    <li style="margin-bottom: 8px;">'''Inventory Stripping:''' Shortly after entering combat, it emits an Ender Dragon growl. Upon this acoustic cue, all players within a 28-block radius have their entire active hotbar, main inventory, and off-hand item slots forcefully stripped and cast onto the ground. Equipped armor slots remain completely unaffected.</li>
+    <li style="margin-bottom: 0;">'''Warning Array:''' Throughout its active state, it plays an ominous Ender Dragon growl every second as an acoustic proximity warning.</li>
+</ul>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Spawning Configurations</h4>
+<ul style="margin: 0 0 20px 0; padding-left: 18px; list-style-type: disc; line-height: 1.7; font-size: 0.9em; color: #9c9788;">
+    <li style="margin-bottom: 8px;">'''Biomes:''' Spawns exclusively inside the '''Wood Plains''' and '''The Thicket''' biomes.</li>
+    <li style="margin-bottom: 8px;">'''Ring Array Formation:''' Generates strictly in groups of 7 units arranged in a perfect, wide ring spanning 400 blocks across (a 200-block radius from a central focal coordinate). All 7 units face directly inward toward the center point.</li>
+    <li style="margin-bottom: 8px;">'''Rarity Restrictions:''' Highly constrained generation rate; two separate ring structures cannot spawn within 900 blocks of one another.</li>
+    <li style="margin-bottom: 0;">'''Topographical Controls:''' Spawns only on relatively flat ground profiles above sea level. The generation algorithm runs multi-tier vertical height checks to ensure its massive clearance envelope does not clip into mountains or overhang geometry.</li>
+</ul>
+
+<!-- ==========================================
+     FRACTUS
+     ========================================== -->
+<h3 style="color: #c4bfa5; margin-top: 40px; margin-bottom: 12px; font-size: 1.15em; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 500;">Fractus</h3>
+<p style="margin-bottom: 15px; font-size: 0.95em;">A specialized, hostile mechanical drone entity found strictly guarding Menger Sponge architectural arrays situated deep within the Sub-Strata dimension. It floats freely, ignores global gravity, never settles onto ground blocks, and emits a persistent light source from its glowing core. It targets survival mode players within a <strong>28-block</strong> detection radius and ignores creative and spectator mode players entirely. When multiple Fractus are targeting different players in the same area, each unit actively avoids converging on an already-occupied target — spreading threat across the group rather than dogpiling a single player.</p>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Combat Mechanics &amp; Behavior</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">The Fractus utilizes advanced combat maneuvering and a modular laser weapon array to suppress threats while keeping a defensive distance:</p>
+<ul style="margin: 0 0 20px 0; padding-left: 18px; list-style-type: square; line-height: 1.7; font-size: 0.9em; color: #9c9788;">
+  <li style="margin-bottom: 8px;"><strong>Adaptive Hover Heights:</strong>
+    The drone normalizes its hover coordinate at <strong>3.25 blocks</strong> above ground level, rising to <strong>4.35 blocks</strong> when drawn into an angry combat state.
+    <ul style="margin: 5px 0 0 0; padding-left: 18px; list-style-type: circle; color: #8c8779;">
+      <li style="margin-bottom: 4px;">If it's not in its home dimension, it gains a <strong>+2.25 blocks</strong> altitude bonus.</li>
+      <li style="margin-bottom: 0;">In the dark, claustrophobic tunnels of the <em>Sub-Strata</em>, height is reduced by <strong>1.0 block</strong> when targeting active players, enabling aggressive close-quarters pursuits.</li>
+    </ul>
+  </li>
+  <li style="margin-bottom: 8px;"><strong>Target-Lock Laser Array:</strong>
+    Emits a focused laser beam with a standard reach of <strong>32 blocks</strong> (expanding to <strong>44 blocks</strong> in its anger phase).
+    <ul style="margin: 5px 0 0 0; padding-left: 18px; list-style-type: circle; color: #8c8779;">
+      <li style="margin-bottom: 4px;"><strong>Standard Mode:</strong> Deals <strong>2.0 damage</strong> (1 heart) every 10 ticks (0.5 seconds).</li>
+      <li style="margin-bottom: 4px;"><strong>Angry Mode:</strong> Deals <strong>3.0 damage</strong> (1.5 hearts) every 6 ticks (0.3 seconds).</li>
+      <li style="margin-bottom: 0;"><strong>Laser Charge Interruption:</strong> Inflicting damage while the drone completes its weapon charging cycle immediately breaks the charge, triggering spatial interruption particles and arresting the charging hum audio.</li>
+    </ul>
+  </li>
+  <li style="margin-bottom: 8px;"><strong>Mega Laser Burst:</strong>
+    A devastating long-range energy sweep dealing <strong>70.0 damage</strong> (35 hearts) in a direct path stretching up to <strong>128 blocks</strong>.
+  </li>
+  <li style="margin-bottom: 8px;"><strong>Tactical Maneuvering:</strong>
+    If a target invades its immediate perimeter (within <strong>6.0 blocks</strong>), the Fractus actively retreats or flanks, attempting to maintain an optimal combat range of <strong>13.0 blocks</strong> (rising to <strong>17.0 blocks</strong> when angry).
+  </li>
+  <li style="margin-bottom: 0;"><strong>Projectile Dodge vs. Intake Shielding:</strong>
+    When targeted by projectile attacks, the Fractus attempts to dodge the incoming projectile. If it successfully dodges, the projectile and its damage are fully negated. However, if the dodge check fails, the projectile penetrates its defensive shield screens and deals full damage to the drone (failed dodges are no longer blocked by passive shielding).
+  </li>
+</ul>
+
+<h4 style="color: #eaeaea; margin-top: 25px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">The Summoning Ritual (Cooperative Mechanics)</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">When multiple Fractus Sentries gather, they coordinate their energy cores to establish a summoning gateway:</p>
+<ul style="margin: 0 0 20px 0; padding-left: 18px; list-style-type: square; line-height: 1.7; font-size: 0.9em; color: #9c9788;">
+  <li style="margin-bottom: 8px;"><strong>Ritual Formation:</strong>
+    If a Sentry is not on cooldown, has summon charges remaining, and detects <strong>2 to 6 eligible partners</strong> within a <strong>96-block range</strong>, it initiates a summoning council. The ritual executes once every <strong>30 seconds</strong> (600 ticks) per drone.
+  </li>
+  <li style="margin-bottom: 8px;"><strong>Core Alignment:</strong>
+    The involved units play echoing Evoker summoning chants, freeze their movement, and project energy beams towards a shared central coordinate.
+  </li>
+  <li style="margin-bottom: 8px;"><strong>Cooperative Efficiency:</strong>
+    The ritual's default duration is <strong>420 ticks</strong> (21 seconds). Every participating Fractus drone beyond the initiator cuts the duration down by <strong>40 ticks</strong> (e.g., a full 6-drone council completes the ritual in just 180 ticks / 9 seconds).
+  </li>
+  <li style="margin-bottom: 8px;"><strong>Adaptive Death Compensation:</strong>
+    If players kill a participant mid-ritual, the remaining drones must compensate; the gateway duration dynamically extends by <strong>120 ticks (6 seconds) per deceased participant</strong>. If the group falls below 2 drones, the ritual forcibly crashes.
+  </li>
+  <li style="margin-bottom: 0;"><strong>Summon Pool Weights:</strong>
+    Upon successful ritual completion, the conduit opens to manifest a new dimensional horror:
+    <ul style="margin: 5px 0 0 0; padding-left: 18px; list-style-type: circle; color: #8c8779;">
+      <li style="margin-bottom: 4px;"><strong>70% Chance:</strong> Summons the <strong>Fractus Prime</strong>.</li>
+      <li style="margin-bottom: 0;"><strong>30% Chance:</strong> Summons the <strong>Rot</strong>.</li>
+    </ul>
+  </li>
+</ul>
+
+<!-- ==========================================
+     FRACTUS PRIME
+     ========================================== -->
+<h3 style="color: #c4bfa5; margin-top: 40px; margin-bottom: 12px; font-size: 1.15em; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 500;">Fractus Prime (The Elite Overseer)</h3>
+<p style="margin-bottom: 15px; font-size: 0.95em;">A 2x scaled mini boss-class variant of the Fractus drone, acting as an orbital planetary laser defense battery. It monitors a vast <strong>48-block</strong> standard threat range, capable of engaging enemies at extreme distances with advanced area-denial capabilities.</p>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Elite Capabilities &amp; Boss Mechanics</h4>
+<ul style="margin: 0 0 20px 0; padding-left: 18px; list-style-type: square; line-height: 1.7; font-size: 0.9em; color: #9c9788;">
+  <li style="margin-bottom: 8px;"><strong>Hover Specifications:</strong>
+    Operates at a standard hover height of <strong>5.5 blocks</strong> (rising to <strong>7.5 blocks</strong> in an angry phase), benefiting from the same <strong>+2.25 blocks</strong> height bonus in <em>Escaped Containment</em> and a <strong>1.5 blocks</strong> descent scaling when engaging players inside the <em>Sub-Strata</em>.
+  </li>
+  <li style="margin-bottom: 8px;"><strong>High-Frequency Laser Array &amp; Laser Multiplication:</strong>
+    Operates a massive weapon with a range of <strong>64 blocks</strong> (increasing to <strong>80 blocks</strong> when angry).
+    <ul style="margin: 5px 0 0 0; padding-left: 18px; list-style-type: circle; color: #8c8779;">
+      <li style="margin-bottom: 4px;">Deals a baseline of <strong>21.3 damage</strong> (10.65 hearts), elevating to a terminal <strong>55.0 damage</strong> (27.5 hearts) in angry states.</li>
+      <li style="margin-bottom: 4px;"><strong>Laser Multiplication (Multi-Targeting):</strong> If the primary target is classified as a strong entity (e.g. players, or entities with max health &ge; 80, current health &ge; 60, attack damage &ge; 6, or lifespans &ge; 2,400 ticks), or if the Prime is in its <em>angry</em> phase, it will split and multiply its weapon array to simultaneously fire up to <strong>5 concurrent lasers</strong>.</li>
+      <li style="margin-bottom: 4px;"><strong>Target Selection:</strong> When calm, the extra lasers will only target other nearby players or strong entities. When enraged/angry, the array targets any and all eligible living entities within its laser range.</li>
+      <li style="margin-bottom: 0;"><strong>Damage Scaling:</strong> The base damage is divided across active lasers (<code>damage / numLasers</code>) to balance individual impact while maximizing area suppression coverage.</li>
+    </ul>
+  </li>
+  <li style="margin-bottom: 8px;"><strong>Mega Laser Burst (Helix Ray) &amp; Telekinetic Hold:</strong>
+    Sweeps a massive wide-area beam across <strong>128 blocks</strong> with a <strong>4.0-block sweep radius</strong>, dealing a catastrophic <strong>180.0 damage</strong> (90 hearts) using a beautiful spiral helix pattern (2.4-block spiral radius with 0.28-block spacing).
+    <ul style="margin: 5px 0 0 0; padding-left: 18px; list-style-type: circle; color: #8c8779;">
+      <li style="margin-bottom: 4px;"><strong>Telekinetic Hold Phase:</strong> Upon initiating the burst, the Prime frequently locks its target in a powerful telekinetic grip, lifting them helplessly into the air.</li>
+      <li style="margin-bottom: 4px;"><strong>Gaze Escape Mechanic:</strong> Players held by telekinesis can strike the Prime to break free early. Instead of a single hit releasing them, the Prime can absorb several strikes:
+        <ul style="margin: 5px 0 0 0; padding-left: 18px; list-style-type: disc; color: #807c6f;">
+          <li style="margin-bottom: 4px;"><strong>Healthy State (&gt;100 HP):</strong> Requires <strong>1 to 6 random hits</strong> to break the hold.</li>
+          <li style="margin-bottom: 0;"><strong>Desperate State (&le; 100 HP):</strong> In its lower health threshold, the Prime locks down with high-energy magnetic resolve, requiring <strong>8 to 24 random hits</strong> to force a release. Breaking free plays anvil/shield sounds and a teleport pop.</li>
+        </ul>
+      </li>
+      <li style="margin-bottom: 0;"><strong>Combat Back-up Maneuver:</strong> If its target is inside a close combat perimeter (within <strong>15.0 blocks</strong>) when initiating a burst, the Prime strategically active-retreats. It flies backwards to a safe threshold of <strong>18.0 blocks</strong> at an accelerated velocity (<strong>+50% speed multiplier</strong>) before unleashing the laser barrage.</li>
+    </ul>
+  </li>
+  <li style="margin-bottom: 8px;"><strong>Laser Sphere Burst (Elite AoE Nova) &amp; Vulnerability Phase:</strong>
+    Every <strong>16 seconds</strong> (320 ticks)—or twice as frequently (every <strong>8 seconds</strong> / 160 ticks) against boss-level threats—the Prime launches its ultimate area-denial attack:
+    <ul style="margin: 5px 0 0 0; padding-left: 18px; list-style-type: circle; color: #8c8779;">
+      <li style="margin-bottom: 4px;"><strong>Buildup Phase (135 ticks / 6.75 seconds):</strong> An energy singularity expands from a radius of 1.5 blocks up to 4.5 blocks, creating a glowing hollow sphere of particles.</li>
+      <li style="margin-bottom: 4px;"><strong>Vaporization Phase (5 ticks / 0.25 seconds):</strong> The singularity violently detonates, expanding immediately to a <strong>17.0-block radius shell</strong>.</li>
+      <li style="margin-bottom: 4px;"><strong>Destruction Profile:</strong> This blast vaporizes all surrounding weak blocks (block hardness values up to <strong>100.0</strong>) and coordinates a massive shockwave dealing <strong>175.0 damage</strong> (87.5 hearts)—rising to <strong>225.0 damage</strong> (112.5 hearts) if angry—to all non-woodbound entities inside the exploding sphere shell.</li>
+      <li style="margin-bottom: 0;"><strong>Post-Burst Vulnerability Window:</strong> Immediately following both a Helix Ray and a Sphere Burst detonation, the Prime has a brief <strong>2.5-second (50 ticks) vulnerability window</strong>. While vulnerable, the drone is incapable of dodging projectile attacks, letting all projectiles bypass its defensive screen directly.</li>
+    </ul>
+  </li>
+  <li style="margin-bottom: 8px;"><strong>Projectile Dodge vs. Intake Shielding:</strong>
+    When calm or angry (and not currently in a post-burst vulnerability window), the Prime attempts to dodge projectile attacks. If it fails the dodge check, the projectile passes through and deals full damage.
+  </li>
+  <li style="margin-bottom: 8px;"><strong>Echolocation Network (Invisibility Detector):</strong>
+    The Prime possesses advanced sensors that bypass standard invisibility cover:
+    <ul style="margin: 5px 0 0 0; padding-left: 18px; list-style-type: circle; color: #8c8779;">
+      <li style="margin-bottom: 4px;"><strong>Passive Audio Clicking:</strong> If an invisible entity (e.g., a player with the Invisibility effect) enters a <strong>15-block radius</strong>, the Prime emits rapid mechanical clicks (sound: <code>minecraft:block.dispenser.fail</code>).</li>
+      <li style="margin-bottom: 4px;"><strong>Active Sonar Sweep:</strong> Every <strong>7 seconds</strong> (140 ticks), if invisible targets remain nearby, it sweeps a visible sonar ripple expanding outward up to 18 blocks.</li>
+      <li style="margin-bottom: 0;"><strong>Lock-on Phase:</strong> Any invisible target caught in this sweep plays dramatic beacon activator sound cues, gets highlighted with Glow and red sparks, and becomes locked in as an active target for <strong>9 seconds</strong> (180 ticks), during which the Prime tracks and faces them instantly.</li>
+    </ul>
+  </li>
+  <li style="margin-bottom: 0;"><strong>Anti-Warden Adaptation:</strong>
+    Refined specifically to combat the Warden in deep underground biomes, the Fractus Prime possesses custom damage mitigations:
+    <ul style="margin: 5px 0 0 0; padding-left: 18px; list-style-type: circle; color: #8c8779;">
+      <li style="margin-bottom: 4px;"><strong>Sonic Boom Defense:</strong> All incoming Sonic Boom damages are scaled down to <strong>55% of original values</strong> (-45% damage reduction).</li>
+      <li style="margin-bottom: 0;"><strong>Physical Attack Defense:</strong> Direct strikes from a Warden are scaled down to <strong>70% of original values</strong> (-30% damage reduction).</li>
+    </ul>
+  </li>
+</ul>
+
+<h4 style="color: #eaeaea; margin-top: 25px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Cleanup Hooks &amp; Death Handling</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">Both the normal Fractus and Fractus Prime utilize robust clean-up listeners. Upon dying or leaving a level, they instantly unregister all custom dynamic light-sources from block locations, violently cut off active loop laser or charging hum audio streams, and release a spatial burst of dispersion particles.</p>
+
+<!-- ==========================================
+     LIGNUM VERMIS
+     ========================================== -->
+<h3 style="color: #c4bfa5; margin-top: 40px; margin-bottom: 12px; font-size: 1.15em; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 500;">Lignum Vermis</h3>
+<p style="margin-bottom: 15px; font-size: 0.95em;">A neutral, arthropod organism constructed entirely of segmented oak planks. Mirroring a wooden silverfish in scale and model size, it blends into forest debris, wood blocks, and abandoned mineshafts. Its diminutive stature allows it to squeeze through narrow apertures and crawl into spaces larger entities cannot navigate.</p>
+<p style="margin-bottom: 15px; font-size: 0.95em;">When severely injured and dropped to low health thresholds, its AI priorities shift completely: it ignores threats entirely and flees to burrow into the nearest source of oak planks, disappearing in a puff of smoke particles.</p>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Harvesting Hazards</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">Mining Scandere Lignum blocks carries a notable risk: there is a 10% chance for a Lignum Vermis to emerge upon total block destruction via player tools or explosions. Additionally, there is a rare 1% chance per tick for the hidden organism to violently fracture the block early while a player is actively mining it. They also generate naturally at specific Y-levels within the Sub-Strata.</p>
+
+<h5 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.02em; font-weight: 500;">Loot Drops</h5>
+<table class="article-table" style="width: 300px; border-collapse: collapse; margin: 15px 0; font-size: 0.9em; border: 1px solid #201414; background: #0c0c0c; margin-bottom: 30px;">
+    <tr style="border-bottom: 1px solid #301414; background: #120c0c;">
+        <th style="padding: 8px 12px; text-align: left; color: #8e8375; font-size: 0.8em; letter-spacing: 0.1em; text-transform: uppercase;">Item Drop</th>
+        <th style="text-align: right; padding: 8px 12px; color: #8e8375; font-size: 0.8em; letter-spacing: 0.1em; text-transform: uppercase;">Chance</th>
+    </tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 8px 12px; color: #9c9788;">Seep</td><td style="text-align: right; padding: 8px 12px; color: #9c9788;">19.5%</td></tr>
+    <tr style="border-bottom: 1px solid #1c1414;"><td style="padding: 8px 12px; color: #c4bfa5;">Splinter Shard</td><td style="text-align: right; padding: 8px 12px; color: #c4bfa5;">15.6%</td></tr>
+    <tr><td style="padding: 8px 12px; color: #70685c; font-style: italic;">Nothing</td><td style="text-align: right; padding: 8px 12px; color: #70685c;">64.9%</td></tr>
+</table>
+
+<!-- ==========================================
+     LIGNUM PALUS
+     ========================================== -->
+<h3 style="color: #c4bfa5; margin-top: 40px; margin-bottom: 12px; font-size: 1.15em; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 500;">Lignum Palus</h3>
+<p style="margin-bottom: 15px; font-size: 0.95em;">A towering, grid-bound entity standing approximately <strong>5.8 blocks tall</strong> that stalks its prey through architecture, mimicry, and psychic coercion. It navigates exclusively along the cardinal axis of block grids, moving in perfectly straight lines and turning only at right angles — designed to blend seamlessly into the pillar-heavy structures of the Sub-Strata dimension. Up close, it deals structural impact damage on direct collision. Its primary threat, however, is not physical.</p>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Grid Navigation</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">Lignum Palus does not pathfind in the conventional sense. It travels at an extremely slow, eerie pace (<strong>0.05 speed</strong>) along block grid corridors, turning 90 degrees at intersections. At each intersection it has a <strong>50% chance</strong> to stop entirely, lock its rotation to a cardinal direction, and stand motionless — indistinguishable from a structural column to an unaware player. These pillar disguise pauses last between 3 and 9 seconds before it resumes movement.</p>
+<p style="margin-bottom: 15px; font-size: 0.95em;">When a player has remained stationary for more than <strong>5 seconds</strong>, Lignum Palus shifts into a closing-in state, accelerating to <strong>0.12 speed</strong> and navigating directly toward the player along the shortest Manhattan path. If blocked, it reroutes around obstacles automatically.</p>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Freeze Mechanic</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">While a moving player maintains direct line of sight toward Lignum Palus, it freezes completely — locking to the nearest block center and holding its cardinal rotation rigidly. The moment the player looks away or line of sight breaks, it resumes movement. It does not freeze against stationary players, closing in on them regardless of whether they are watching.</p>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Projectile Dodge</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">Any incoming projectile triggers an Enderman-style teleport. Lignum Palus attempts up to 64 times to find a safe grid-aligned landing point within a 16-block horizontal and 8-block vertical radius, requiring 6 blocks of vertical clearance at the destination to accommodate its height. On a successful dodge the damage is fully cancelled. It briefly pauses in pillar disguise mode on landing and plays teleport sounds at both the origin and destination.</p>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Hypnosis</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">The defining ability of Lignum Palus. If a survival mode player stares directly into its eye region — within <strong>20 blocks</strong>, with an unobstructed line of sight, at a gaze accuracy threshold of <strong>0.82 dot product</strong> — a stare counter begins accumulating. After <strong>70 consecutive ticks</strong> of sustained staring, a state activates, accompanied by a deep portal trigger sound and an End Portal activation effect.</p>
+
+<div style="background: #0d0909; border: 1px solid #321616; border-left: 2px solid #9e2a2a; padding: 15px; margin: 15px 0; font-size: 0.9em; line-height: 1.6; color: #9c9788;">
+Once active, Lignum Palus locks in place and telekinetically pulls the player to a suspended position <strong>2 blocks in front of its face</strong>, held slightly below eye level for a forced direct stare angle. The player's camera is locked toward the entity and cannot be moved. Lignum Palus faces the player perfectly throughout the duration. The player is held in the air with their fall distance continuously reset, preventing fall damage on release.
+</div>
+
+<p style="margin-bottom: 15px; font-size: 0.95em;">While suspended, the player receives the following effects on continuous refresh:</p>
+<ul style="margin: 0 0 20px 0; padding-left: 18px; list-style-type: disc; line-height: 1.7; font-size: 0.9em; color: #9c9788;">
+    <li style="margin-bottom: 8px;">'''Slowness III''' for 7 seconds (refreshed each tick)</li>
+    <li style="margin-bottom: 8px;">'''Darkness''' for 7 seconds (refreshed each tick)</li>
+    <li style="margin-bottom: 0;">'''Wither II''' for 7 seconds (refreshed each tick)</li>
+</ul>
+<p style="margin-bottom: 20px; font-size: 0.95em;">A deep nether portal ambient sound plays every 30 ticks and a loud Warden heartbeat plays every 25 ticks throughout the active hypnosis state.</p>
+
+<div style="background: #09090c; border: 1px solid #1a1520; padding: 15px; margin: 15px 0; font-size: 0.9em; line-height: 1.6; color: #9c9788;">
+'''Cancellation Conditions:''' The hypnosis state ends immediately if the player moves outside <strong>24 blocks</strong>, enters creative or spectator mode, dies, or if Lignum Palus takes damage. On cancellation, a <strong>5-second (100 ticks) cooldown</strong> is applied to the entity, resetting its internal hypnosis state NBT keys and completely preventing it from immediately initiating another hypnosis cycle on any nearby non-player entities. Dealing damage to Lignum Palus is therefore the most reliable team-play or defensive strategy to break the trance and release a caught player.
+</div>
+
+<h4 style="color: #eaeaea; margin-top: 20px; margin-bottom: 8px; font-size: 1.05em; font-weight: 500;">Damage Immunities</h4>
+<p style="margin-bottom: 15px; font-size: 0.95em;">Lignum Palus is immune to poison, potions thrown from area effect clouds, cactus, drowning, falling anvils, and Wither damage.</p>
+
+<!-- ==========================================
+     THE ROT
+     ========================================== -->
+<h3 style="color: #ff3333; margin-top: 40px; margin-bottom: 12px; font-size: 1.15em; letter-spacing: 0.05em; text-transform: uppercase; font-weight: bold; text-shadow: 0 0 4px #ff0000, 0 0 10px #cc0000, 0 0 18px #880000;">The Rot</h3>
+<div style="background: #0d0909; border: 1px solid #321616; border-left: 2px dashed #9e2a2a; padding: 20px;">
+    <p style="font-size: 0.95em; margin-bottom: 12px; color: #ff5252; line-height: 1.6; font-weight: bold; text-shadow: 0 0 4px rgba(255, 82, 82, 0.3);">Relentless. Adaptive. Extermination Machine.</p>
+    <p style="font-size: 0.9em; margin-bottom: 15px; color: #8c8779; line-height: 1.6;">The Rot operates as a multi-dimensional sentinel, designed specifically as an absolute hard-counter metric for advanced players carrying immense item power modifiers sourced from outside dimensions. It blends the devastating, high-speed hand-to-hand martial combat of <strong>Minos Prime</strong> with the terrifying, adaptive counter-mechanics of the X-Men's <strong>Sentinels</strong>. It begins encounters inert, showing no initial advanced abilities, and dynamically learns, mimics, and overrides the combat traits of its targets as the battle rages on.</p>
+
+    <div class="mw-collapsible mw-collapsed" style="background: #110909; border: 1px solid #321616; border-radius: 4px; padding: 12px; margin-top: 15px;">
+        <div class="mw-collapsible-toggle" style="background: #201414; border: 1px solid #3e1e1e; border-radius: 3px; padding: 8px 16px; font-weight: bold; font-size: 0.9em; color: #ff5252; text-align: center; cursor: pointer; text-transform: uppercase; letter-spacing: 0.08em; display: inline-block; user-select: none;">
+            Dossier
+        </div>
+
+        <div class="mw-collapsible-content" style="margin-top: 12px; border-top: 1px solid #201414; padding-top: 12px; font-size: 0.85em; line-height: 1.6; color: #8c8779;">
+
+            <p style="margin-bottom: 10px;"><strong style="color: #c4bfa5;">Adaptive Learning & Escalation:</strong> The Rot starts combat devoid of specialized magic or ranges. But it takes only seconds to study, replicate, and adapt permanently. Its speed, health regeneration, and aggression scale fluidly for up to <strong>1 continuous real-world hour (72,000 ticks)</strong> of engagement, ensuring even the most heavily modded players cannot win through pure wars of attrition.</p>
+
+            <ul style="margin: 0 0 12px 0; padding-left: 16px; list-style-type: square; color: #9c9788;">
+                <li style="margin-bottom: 6px;"><strong>Dynamic Aggression Escalation:</strong> Runs on fluctuating combat phases (45 to 120 seconds). Aggression accelerates relentlessly, compressing ability cooldowns from an initial <strong>160 ticks</strong> down to a frantic <strong>20 ticks</strong> at peak adrenaline cycle.</li>
+                <li style="margin-bottom: 6px;"><strong>Adaptive Regeneration:</strong> Triggers after taking <strong>50 cumulative damage</strong>. Healing scales directly with encounter length, accelerating drastically to critical rates when health drops below 50% and 25%.</li>
+                <li style="margin-bottom: 6px;"><strong>Force Telekinesis:</strong> Learned at 20 seconds. Suspends a target helplessly in midair before performing crushing gravity throws and slams.</li>
+                <li style="margin-bottom: 6px;"><strong>Extraction Grapple:</strong> Learned randomly between 10–25 seconds. Pins targets down, applying Slowness and Blindness, siphoning physical health directly back to the sentinel.</li>
+                <li style="margin-bottom: 6px;"><strong>Sonic Boom Resonance:</strong> Mimics warden physiology if it engages a <strong>Warden</strong>, gaining a devastating directional resonance blast.</li>
+                <li style="margin-bottom: 6px;"><strong>Thermal Synthesis (Beams):</strong> Learns and synthesizes thermal lasers. Heat (Solar Beam) is learned from taking fire damage or being in hot biomes. Cold (Cryo Beam) is adapted from taking cold damage or cold biomes, triggering heavy frost-shatters.</li>
+                <li style="margin-bottom: 6px;"><strong>Dimensional Spacing (Blink):</strong> Adapts teleporting dodge-mechanics through End-stimuli (End dimension, Ender Pearls nearby, or fighting End creatures), making it highly evasive.</li>
+                <li style="margin-bottom: 0;"><strong>Overhead &amp; Martial Combos:</strong> Once the sentinel gains high-speed teleportation and physical coordination, it unlocks complex combo chains.</li>
+            </ul>
+
+            <p style="margin-bottom: 10px;"><strong style="color: #c4bfa5;">Combat Behaviors:</strong></p>
+            <ul style="margin: 0 0 12px 0; padding-left: 16px; list-style-type: square; color: #9c9788;">
+                <li style="margin-bottom: 6px;"><strong>Thermal Beams:</strong> Fires specialized lasers that bore holes directly through the terrain based on block hardness. <strong>Solar beams</strong> melt physical armor with unmitigable heat penetration. <strong>Cryo beams</strong> rapidly freeze and shatter living targets with massive cold-damage multipliers.</li>
+                <li style="margin-bottom: 6px;"><strong>Evasive Blinks:</strong> Exploits space to dodge incoming hand-to-hand blows (18t cooldown) or flank reposition directly behind the target's visual blind spots.</li>
+                <li style="margin-bottom: 6px;"><strong>Anti-Flight Intercept:</strong> Airborne targets are immediately intercepted, reset to zero upward momentum, and spiked directly down into the ground with catastrophic kinetic force.</li>
+                <li style="margin-bottom: 0;"><strong>Adaptive Armor Plating:</strong> Tracks sudden DPS spikes, applying rising temporary resistance buffs when sustained damage exceeds standard thresholds.</li>
+            </ul>
+
+            <p style="margin-bottom: 10px;"><strong style="color: #c4bfa5;">Martial Combat Combos (Minos Protocol):</strong></p>
+            <ul style="margin: 0 0 12px 0; padding-left: 16px; list-style-type: square; color: #9c9788;">
+                <li style="margin-bottom: 6px;"><strong>Triple Threat:</strong> Consists of slamming on the ground, a dropkick, and a rider kick.</li>
+                <li style="margin-bottom: 6px;"><strong>High Sky Slam:</strong> Defies gravity, launching the target skyward and slamming them back with full kinetic momentum (Totem-exclusive).</li>
+                <li style="margin-bottom: 6px;"><strong>Punch + Dropkick:</strong> Leverages speed to knock players backward, instantly following up with an air-assisted horizontal dropkick.</li>
+                <li style="margin-bottom: 0;"><strong>Punch + Rider Kick:</strong> Punches to break shields, immediately jumping into a spectacular, high-pitch diving kick that shatters defense.</li>
+            </ul>
+
+            <div style="background: #110909; border: 1px solid #281010; padding: 8px 12px; font-size: 0.9em; color: #c4bfa5; border-radius: 2px; margin-bottom: 12px;">
+                Communicates on-screen with chilling, custom adaptive dialogue lines when engaging supernatural targets (like the Wither).
+            </div>
+
+            <p style="margin-bottom: 10px;"><strong style="color: #ff5252;">The Totem Overload:</strong></p>
+            <p style="margin-bottom: 10px;">The sentinel actively scans for powerful defensive parameters in its target's possession, such as the standard <strong>Totem of Undying</strong> or the rare <strong>Infinity Totem</strong>. If a target remains within a 12-block radius, the Rot physically drains and steals the equipped totem over a 4-second sequence.</p>
+            <p style="margin-bottom: 10px;">The Rot holds the stolen artifact, studying it briefly before crushing it in its grip, integrating the magic to permanently empower itself depending on the totem type:</p>
+            
+            <p style="margin-bottom: 10px;"><strong style="color: #ff5252;">Standard Totem (Empowered State):</strong></p>
+            <ul style="margin: 0 0 12px 0; padding-left: 16px; list-style-type: square; color: #9c9788;">
+                <li style="margin-bottom: 6px;">+50% permanent attack damage and +35% movement speed.</li>
+                <li style="margin-bottom: 6px;">Global ability cooldowns tick down twice as fast.</li>
+                <li style="margin-bottom: 6px;">Laser terrain drilling speed accelerates 3x.</li>
+                <li style="margin-bottom: 6px;">Melee combos scale to a terrifying 85% activation chance per strike.</li>
+                <li style="margin-bottom: 0;">Attacks punch tunnels directly through blocks behind the impact point.</li>
+            </ul>
+
+            <p style="margin-bottom: 10px;"><strong style="color: #ff5252;">Infinity Totem (Absolute Limit State):</strong></p>
+            <p style="margin-bottom: 10px;">Crushing the legendary Infinity Totem—supported via compatibility with the <span style="font-weight: 500;">[https://www.curseforge.com/minecraft/mc-mods/re-avaritia Avaritia]</span> mod—elevates the sentinel to its ultimate ceiling of power, triggering <strong>Infinity Mode</strong>:</p>
+            <ul style="margin: 0 0 12px 0; padding-left: 16px; list-style-type: square; color: #9c9788;">
+                <li style="margin-bottom: 6px;">Inherits all benefits and speed adjustments of the standard Empowered state.</li>
+                <li style="margin-bottom: 6px;">Grants immense, continuous <strong>passive health regeneration</strong> that heals its wounds in real time.</li>
+                <li style="margin-bottom: 0;">Significantly enlarges shockwaves, blast radii, and melee attack damage, driving its aggression to relentless limits.</li>
+            </ul>
+            <p style="margin-bottom: 0; font-style: italic; color: #70685c;">Once consumed, the token can never be reclaimed, sealing the sentinel's final evolutionary form.</p>
+
+        </div>
+    </div>
+
+    <!-- Lore / Incident Log Subsection -->
+    <div style="margin-top: 25px; border-top: 1px solid #201212; padding-top: 20px;">
+        <h4 style="color: #ff5252; margin-top: 0; margin-bottom: 12px; font-size: 1.05em; letter-spacing: 0.05em; text-transform: uppercase; font-weight: bold; text-shadow: 0 0 4px #7a1e1e;">Survivor</h4>
+        <div style="background: rgba(20, 10, 10, 0.3); border-left: 3px solid #ff3333; padding: 18px 20px; margin-bottom: 10px; font-size: 0.9em; color: #b1ac9e; line-height: 1.7; border-radius: 0 4px 4px 0;">
+            <p style="margin-top: 0; margin-bottom: 14px; font-style: italic;">
+                "I entered the Backwoods at the absolute peak of survival skill, heavy, fully enchanted Netherite armor, ready to conquer the dark. I built a fortified outpost of stone and iron, thinking myself safe, but the dimension didn't send a pack or a shadow. It sent an entity after me.
+            </p>
+            <p style="margin-bottom: 14px; font-style: italic;">
+                When it appeared out of thin air, I landed flawless critical strikes, but the horror adapted right before my eyes. Its skin hardened, caused my sword to bounce off with a horrific ring. It shredded through my obsidian block walls like paper and flickered out of reality, instantly reappearing behind me.
+            </p>
+            <p style="margin-bottom: 14px; font-style: italic;">
+                I held tight to a Totem of Undying. But the thing knew exactly what it was. Wrenched the totem from my hands, and crushed it. The totem's activation particles formed around it, like it used it to amplify its powers.
+            </p>
+            <p style="margin-bottom: 0; font-style: italic;">
+                Desperate, I pulled out my ultimate trump card, a [https://modrinth.com/mod/tacz-1.21.1/ heavy, multi-barreled mechanical weapon of brass and iron that spits lead faster than a lightning storm]. I unloaded the metal storm directly into its chest. But instead of splintering, its skin adapted instantly, absorbing the barrage as if the hail of lead was nothing more than a breeze. I survived only by hiding and dragging myself into a crack in the ground as my armor is in pieces.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- ==========================================
+     GLOBAL STATISTICS TABLE
+     ========================================== -->
+<h2 style="color: #eaeaea; border-bottom: 1px solid #301414; padding-bottom: 8px; margin-top: 50px; margin-bottom: 25px; font-size: 1.4em; letter-spacing: 0.15em; text-transform: uppercase; font-weight: normal;">Global Entity Statistics</h2>
+
+<div style="overflow-x: auto; margin-top: 20px; border: 1px solid #201414; background: #0c0c0c; margin-bottom: 30px;">
+<table class="article-table" style="font-size: 0.8em; width: 100%; border-collapse: collapse; text-align: center;">
+    <tr style="border-bottom: 1px solid #301414; background: #120c0c;">
+        <th style="padding: 10px 12px; text-align: left; color: #8e8375; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;">Attribute</th>
+        <th style="padding: 10px 12px; color: #8e8375; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;">Splinter</th>
+        <th style="padding: 10px 12px; color: #8e8375; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;">Log Splinter</th>
+        <th style="padding: 10px 12px; color: #8e8375; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;">Blindspot</th>
+        <th style="padding: 10px 12px; color: #8e8375; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;">Petrified Log</th>
+        <th style="padding: 10px 12px; color: #8e8375; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;">Stilt Walker</th>
+        <th style="padding: 10px 12px; color: #8e8375; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;">The Rot</th>
+        <th style="padding: 10px 12px; color: #8e8375; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;">Lignum Gigas</th>
+        <th style="padding: 10px 12px; color: #8e8375; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;">Fractus</th>
+        <th style="padding: 10px 12px; color: #8e8375; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;">Fractus Prime</th>
+        <th style="padding: 10px 12px; color: #8e8375; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;">Lignum Vermis</th>
+        <th style="padding: 10px 12px; color: #8e8375; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;">Lignum Palus</th>
+    </tr>
+    <tr style="border-bottom: 1px solid #1c1414;">
+        <td style="padding: 10px 12px; text-align: left; font-weight: bold; background: #080808; color: #c4bfa5;">Woodbound Group</td>
+        <td style="color: #9c9788;">Yes</td><td style="color: #9c9788;">Yes</td><td style="color: #9c9788;">Yes</td><td style="color: #9c9788;">Yes</td><td style="color: #9c9788;">Yes</td><td style="color: #9c9788;">Yes</td><td style="color: #9c9788;">Yes</td><td style="color: #9c9788;">Yes</td><td style="color: #9c9788;">Yes</td><td style="color: #9c9788;">Yes</td><td style="color: #9c9788;">Yes</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #1c1414;">
+        <td style="padding: 10px 12px; text-align: left; font-weight: bold; background: #080808; color: #c4bfa5;">Health</td>
+        <td style="color: #9c9788;">30 HP</td><td style="color: #9c9788;">32 HP</td><td style="color: #9c9788;">30 HP</td><td style="color: #9c9788;">56 HP</td><td style="color: #9c9788;">40 HP</td><td style="color: #c4bfa5;">550 HP (+2/min)</td><td style="color: #c4bfa5; font-weight: 500;">1008 HP</td><td style="color: #9c9788;">48 HP</td><td style="color: #c4bfa5;">270 HP</td><td style="color: #9c9788;">10 HP</td><td style="color: #9c9788;">50 HP</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #1c1414;">
+        <td style="padding: 10px 12px; text-align: left; font-weight: bold; background: #080808; color: #c4bfa5;">Damage</td>
+        <td style="color: #9c9788;">6</td><td style="color: #9c9788;">6</td><td style="color: #9c9788;">6</td><td style="color: #9c9788;">8</td><td style="color: #9c9788;">N/A</td><td style="color: #c4bfa5; font-weight: 500;">18 base (Adaptive ±20%, +50% Empowered)</td><td style="color: #9c9788;">3</td><td style="color: #9c9788;">2 (3 angry)</td><td style="color: #c4bfa5;">21.3 (31.3 angry)</td><td style="color: #9c9788;">1</td><td style="color: #9c9788;">8</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #1c1414;">
+        <td style="padding: 10px 12px; text-align: left; font-weight: bold; background: #080808; color: #c4bfa5;">Armor</td>
+        <td style="color: #9c9788;">0</td><td style="color: #9c9788;">2</td><td style="color: #9c9788;">0</td><td style="color: #9c9788;">4</td><td style="color: #9c9788;">0</td><td style="color: #9c9788;">15</td><td style="color: #9c9788;">0</td><td style="color: #9c9788;">6</td><td style="color: #9c9788;">20</td><td style="color: #9c9788;">0.5</td><td style="color: #9c9788;">6</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #1c1414;">
+        <td style="padding: 10px 12px; text-align: left; font-weight: bold; background: #080808; color: #c4bfa5;">Move Speed</td>
+        <td style="color: #9c9788;">0.335</td><td style="color: #9c9788;">0.335</td><td style="color: #9c9788;">0.335</td><td style="color: #9c9788;">0.3</td><td style="color: #9c9788;">0.16</td><td style="color: #9c9788;">0.3 base (Adaptive -45% → +25%, +35% Empowered)</td><td style="color: #9c9788;">0.0</td><td style="color: #9c9788;">0.2</td><td style="color: #9c9788;">0.2</td><td style="color: #9c9788;">0.23</td><td style="color: #9c9788;">0.23</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #1c1414;">
+        <td style="padding: 10px 12px; text-align: left; font-weight: bold; background: #080808; color: #c4bfa5;">Attack KB / KB Resist</td>
+        <td style="color: #9c9788;">0 / 0</td><td style="color: #9c9788;">0 / 0</td><td style="color: #9c9788;">0 / 0</td><td style="color: #9c9788;">0.1 / 0.65</td><td style="color: #9c9788;">0 / 0.1</td><td style="color: #9c9788;">0.6 / 0.5 base (Resist grows up to 1.0)</td><td style="color: #9c9788;">0.0 / 1.0</td><td style="color: #9c9788;">0.0 / 0.0</td><td style="color: #9c9788;">0.0 / 0.0</td><td style="color: #9c9788;">0.0 / 0.0</td><td style="color: #9c9788;">0.0 / 0.8</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #1c1414;">
+        <td style="padding: 10px 12px; text-align: left; font-weight: bold; background: #080808; color: #c4bfa5;">Rose Wilt</td>
+        <td style="color: #9c9788;">450t</td><td style="color: #9c9788;">750t</td><td style="color: #c4bfa5; font-weight: 500;">150t</td><td style="color: #9c9788;">400t</td><td style="color: #9c9788;">N/A</td><td style="color: #9c9788;">N/A</td><td style="color: #9c9788;">N/A</td><td style="color: #9c9788;">N/A</td><td style="color: #9c9788;">N/A</td><td style="color: #9c9788;">N/A</td><td style="color: #9c9788;">N/A</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #1c1414;">
+        <td style="padding: 10px 12px; text-align: left; font-weight: bold; background: #080808; color: #c4bfa5;">Max Hardness</td>
+        <td style="color: #9c9788;">50</td><td style="color: #9c9788;">50</td><td style="color: #9c9788;">50</td><td style="color: #9c9788;">60</td><td style="color: #9c9788;">50</td><td style="color: #9c9788;">60</td><td style="color: #9c9788;">40 (Sink)</td><td style="color: #9c9788;">0.2 (2.0 angry)</td><td style="color: #9c9788;">4.5 (15.0 angry)</td><td style="color: #9c9788;">N/A</td><td style="color: #9c9788;">N/A</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #1c1414;">
+        <td style="padding: 10px 12px; text-align: left; font-weight: bold; background: #080808; color: #c4bfa5;">Build / Bridge</td>
+        <td style="color: #c4bfa5;">Yes</td><td style="color: #c4bfa5;">Yes</td><td style="color: #c4bfa5;">Yes</td><td style="color: #c4bfa5;">Yes</td><td style="color: #9c9788;">No</td><td style="color: #9c9788;">No</td><td style="color: #9c9788;">No</td><td style="color: #9c9788;">No</td><td style="color: #9c9788;">No</td><td style="color: #9c9788;">No</td><td style="color: #9c9788;">No</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #1c1414;">
+        <td style="padding: 10px 12px; text-align: left; font-weight: bold; background: #080808; color: #c4bfa5;">Rage Trigger</td>
+        <td style="color: #9c9788;">600t</td><td style="color: #9c9788;">590t</td><td style="color: #9c9788;">590t</td><td style="color: #9c9788;">600t</td><td style="color: #9c9788;">N/A</td><td style="color: #c4bfa5;">N/A</td><td style="color: #c4bfa5;">Immediate</td><td style="color: #9c9788;">10 HP</td><td style="color: #9c9788;">100 HP</td><td style="color: #9c9788;">N/A</td><td style="color: #9c9788;">N/A</td>
+    </tr>
+    <tr>
+        <td style="padding: 10px 12px; text-align: left; font-weight: bold; background: #080808; color: #c4bfa5;">Rage Escape</td>
+        <td style="color: #9c9788;">14b</td><td style="color: #9c9788;">18b</td><td style="color: #9c9788;">16b</td><td style="color: #9c9788;">18b</td><td style="color: #9c9788;">N/A</td><td style="color: #9c9788;">N/A</td><td style="color: #9c9788;">N/A</td><td style="color: #9c9788;">N/A</td><td style="color: #9c9788;">N/A</td><td style="color: #9c9788;">N/A</td><td style="color: #9c9788;">N/A</td>
+    </tr>
+</table>
+</div>

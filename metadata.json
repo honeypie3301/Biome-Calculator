@@ -1,0 +1,6 @@
+{
+  "name": "Backwoods Biome Rarity Calculator",
+  "description": "A precise 5D noise-space calculator for Backwoods mod biome rarities, expanded with a professional, automated tool to decompile and port the Viltrumite Core and Viltrumite Flight Fabric 1.20.1 mods to NeoForge 1.21.1.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
