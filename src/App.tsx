@@ -21,7 +21,9 @@ import {
   MapPin,
   ChevronLeft,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Trash2,
+  Plus
 } from "lucide-react";
 
 // Types for Biome parameters
@@ -507,8 +509,45 @@ function PreciseNumberInput({
   );
 }
 
+const DEFAULT_SANDBOX_BIOMES: Biome[] = [
+  {
+    id: "sandbox_valley",
+    name: "Sandbox Valley",
+    color: "#4db6ac",
+    temp: { min: -0.4, max: 0.4 },
+    hum: { min: -0.4, max: 0.4 },
+    cont: { min: -0.5, max: 0.5 },
+    eros: { min: -0.5, max: 0.5 },
+    weird: { min: -0.5, max: 0.5 },
+    description: "A custom sandbox biome representing a warm, temperate valley."
+  },
+  {
+    id: "sandbox_peaks",
+    name: "Sandbox Peaks",
+    color: "#ff7043",
+    temp: { min: -1.0, max: -0.3 },
+    hum: { min: -0.8, max: -0.2 },
+    cont: { min: 0.2, max: 1.0 },
+    eros: { min: 0.3, max: 0.9 },
+    weird: { min: 0.4, max: 1.0 },
+    description: "A rugged, custom sandbox biome representing sharp, frozen peaks."
+  }
+];
+
 export default function App() {
   const [selectedDimensionId, setSelectedDimensionId] = useState<string>("the_grain");
+  const [customSandboxBiomes, setCustomSandboxBiomes] = useState<Biome[]>(() => {
+    const saved = localStorage.getItem("custom_sandbox_biomes");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        // Fall back
+      }
+    }
+    return DEFAULT_SANDBOX_BIOMES;
+  });
+
   const [biomes, setBiomes] = useState<Biome[]>(INITIAL_BIOMES);
   const [selectedBiomeId, setSelectedBiomeId] = useState<string>("splinter_nest");
   
@@ -563,6 +602,63 @@ export default function App() {
   const [showRivers, setShowRivers] = useState<boolean>(true);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isDraggingSlider, setIsDraggingSlider] = useState<boolean>(false);
+
+  // LocalStorage persistence for Custom Sandbox biomes
+  useEffect(() => {
+    localStorage.setItem("custom_sandbox_biomes", JSON.stringify(customSandboxBiomes));
+    if (selectedDimensionId === "custom_sandbox") {
+      setBiomes(customSandboxBiomes);
+    }
+  }, [customSandboxBiomes, selectedDimensionId]);
+
+  // Update color of custom biome
+  const handleUpdateCustomBiomeColor = (biomeId: string, color: string) => {
+    setCustomSandboxBiomes(prev => prev.map(b => b.id === biomeId ? { ...b, color } : b));
+    setBiomes(prev => prev.map(b => b.id === biomeId ? { ...b, color } : b));
+  };
+
+  // Update name of custom biome
+  const handleUpdateCustomBiomeName = (biomeId: string, name: string) => {
+    setCustomSandboxBiomes(prev => prev.map(b => b.id === biomeId ? { ...b, name } : b));
+    setBiomes(prev => prev.map(b => b.id === biomeId ? { ...b, name } : b));
+  };
+
+  // Add custom biome
+  const handleAddCustomBiome = () => {
+    const id = `custom_biome_${Date.now()}`;
+    const newBiome: Biome = {
+      id,
+      name: `Custom Biome ${customSandboxBiomes.length + 1}`,
+      color: `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`,
+      temp: { min: -0.5, max: 0.5 },
+      hum: { min: -0.5, max: 0.5 },
+      cont: { min: -0.5, max: 0.5 },
+      eros: { min: -0.5, max: 0.5 },
+      weird: { min: -0.5, max: 0.5 },
+      description: "A user-defined custom sandbox biome with adjustable climate target ranges."
+    };
+    
+    setCustomSandboxBiomes(prev => [...prev, newBiome]);
+    setBiomes(prev => [...prev, newBiome]);
+    setSelectedBiomeId(id);
+  };
+
+  // Delete custom biome
+  const handleDeleteCustomBiome = (biomeId: string) => {
+    const updated = customSandboxBiomes.filter(b => b.id !== biomeId);
+    setCustomSandboxBiomes(updated);
+    setBiomes(updated);
+    if (selectedBiomeId === biomeId) {
+      setSelectedBiomeId(updated[0]?.id || "");
+    }
+  };
+
+  // Reset or clear sandbox completely
+  const handleClearAllSandbox = () => {
+    setCustomSandboxBiomes([]);
+    setBiomes([]);
+    setSelectedBiomeId("");
+  };
 
   // Global listener to detect when a slider range is being dragged, allowing for low-res real-time rendering
   useEffect(() => {
@@ -721,20 +817,39 @@ export default function App() {
 
   // Derive selected dimension
   const selectedDimension = useMemo(() => {
+    if (selectedDimensionId === "custom_sandbox") {
+      return {
+        id: "custom_sandbox",
+        name: "Custom Sandbox",
+        description: "Your customized testing ground with persistent, user-configured biomes.",
+        defaultFixed: { temp: 0.0, hum: 0.0, cont: 0.0, eros: 0.0, weird: 0.0 },
+        biomes: customSandboxBiomes
+      };
+    }
     return DIMENSIONS.find(d => d.id === selectedDimensionId) || DIMENSIONS[0];
-  }, [selectedDimensionId]);
+  }, [selectedDimensionId, customSandboxBiomes]);
 
   // Handle changing the dimension
   const handleDimensionChange = (dimensionId: string) => {
     setSelectedDimensionId(dimensionId);
-    const dim = DIMENSIONS.find(d => d.id === dimensionId) || DIMENSIONS[0];
-    setBiomes(dim.biomes);
-    setSelectedBiomeId(dim.biomes[0].id);
-    setFixedTemp(dim.defaultFixed.temp);
-    setFixedHum(dim.defaultFixed.hum);
-    setFixedCont(dim.defaultFixed.cont);
-    setFixedEros(dim.defaultFixed.eros);
-    setFixedWeird(dim.defaultFixed.weird);
+    if (dimensionId === "custom_sandbox") {
+      setBiomes(customSandboxBiomes);
+      setSelectedBiomeId(customSandboxBiomes[0]?.id || "");
+      setFixedTemp(0.0);
+      setFixedHum(0.0);
+      setFixedCont(0.0);
+      setFixedEros(0.0);
+      setFixedWeird(0.0);
+    } else {
+      const dim = DIMENSIONS.find(d => d.id === dimensionId) || DIMENSIONS[0];
+      setBiomes(dim.biomes);
+      setSelectedBiomeId(dim.biomes[0].id);
+      setFixedTemp(dim.defaultFixed.temp);
+      setFixedHum(dim.defaultFixed.hum);
+      setFixedCont(dim.defaultFixed.cont);
+      setFixedEros(dim.defaultFixed.eros);
+      setFixedWeird(dim.defaultFixed.weird);
+    }
   };
 
   // Calculate selected biome
@@ -744,8 +859,13 @@ export default function App() {
 
   // Suggest commonizer configurations for the selected biome generically
   const handleApplyPreset = (type: "moderate" | "frequent" | "restored") => {
-    const originalDim = DIMENSIONS.find(d => d.id === selectedDimensionId) || DIMENSIONS[0];
-    const originalBiome = originalDim.biomes.find(b => b.id === selectedBiomeId);
+    let originalBiome: Biome | undefined;
+    if (selectedDimensionId === "custom_sandbox") {
+      originalBiome = DEFAULT_SANDBOX_BIOMES.find(b => b.id === selectedBiomeId);
+    } else {
+      const originalDim = DIMENSIONS.find(d => d.id === selectedDimensionId) || DIMENSIONS[0];
+      originalBiome = originalDim.biomes.find(b => b.id === selectedBiomeId);
+    }
     if (!originalBiome) return;
 
     let updatedBiome: Biome;
@@ -792,17 +912,31 @@ export default function App() {
       updatedBiome = { ...originalBiome };
     }
 
-    setBiomes(prev => prev.map(b => b.id === selectedBiomeId ? updatedBiome : b));
+    setBiomes(prev => {
+      const updated = prev.map(b => b.id === selectedBiomeId ? updatedBiome : b);
+      if (selectedDimensionId === "custom_sandbox") {
+        setCustomSandboxBiomes(updated);
+      }
+      return updated;
+    });
   };
 
   // Global presets for all biomes of the CURRENT dimension
   const handleApplyGlobalPreset = (type: "default" | "equal") => {
     if (type === "default") {
-      setBiomes(selectedDimension.biomes);
+      if (selectedDimensionId === "custom_sandbox") {
+        setCustomSandboxBiomes(DEFAULT_SANDBOX_BIOMES);
+        setBiomes(DEFAULT_SANDBOX_BIOMES);
+        if (DEFAULT_SANDBOX_BIOMES.length > 0) {
+          setSelectedBiomeId(DEFAULT_SANDBOX_BIOMES[0].id);
+        }
+      } else {
+        setBiomes(selectedDimension.biomes);
+      }
     } else if (type === "equal") {
       setBiomes(prev => {
         const N = prev.length;
-        return prev.map((b, i) => {
+        const updated = prev.map((b, i) => {
           const minVal = -1.0 + i * (2.0 / N);
           const maxVal = -1.0 + (i + 1) * (2.0 / N);
           return {
@@ -814,6 +948,10 @@ export default function App() {
             weird: { min: -1.0, max: 1.0 }
           };
         });
+        if (selectedDimensionId === "custom_sandbox") {
+          setCustomSandboxBiomes(updated);
+        }
+        return updated;
       });
     }
   };
@@ -824,7 +962,7 @@ export default function App() {
       // 1D scaling factor is the 5th root of the volume scale factor
       const d1Factor = Math.pow(factor, 0.2);
       
-      return prev.map(b => {
+      const updated = prev.map(b => {
         if (b.id === targetId) {
           // Adjust target biome (expand/shrink its boundaries)
           const adjustDim = (range: { min: number; max: number }) => {
@@ -869,6 +1007,11 @@ export default function App() {
           };
         }
       });
+
+      if (selectedDimensionId === "custom_sandbox") {
+        setCustomSandboxBiomes(updated);
+      }
+      return updated;
     });
   };
 
@@ -879,23 +1022,29 @@ export default function App() {
     bound: "min" | "max", 
     value: number
   ) => {
-    setBiomes(prev => prev.map(b => {
-      if (b.id !== biomeId) return b;
-      const dim = b[dimension];
-      const newValue = parseFloat(value.toFixed(4));
-      
-      let updatedRange = { ...dim };
-      if (bound === "min") {
-        updatedRange.min = newValue;
-      } else {
-        updatedRange.max = newValue;
-      }
+    setBiomes(prev => {
+      const updated = prev.map(b => {
+        if (b.id !== biomeId) return b;
+        const dim = b[dimension];
+        const newValue = parseFloat(value.toFixed(4));
+        
+        let updatedRange = { ...dim };
+        if (bound === "min") {
+          updatedRange.min = newValue;
+        } else {
+          updatedRange.max = newValue;
+        }
 
-      return {
-        ...b,
-        [dimension]: updatedRange
-      };
-    }));
+        return {
+          ...b,
+          [dimension]: updatedRange
+        };
+      });
+      if (selectedDimensionId === "custom_sandbox") {
+        setCustomSandboxBiomes(updated);
+      }
+      return updated;
+    });
   };
 
   // Calculate volume of each biome in noise space
@@ -1275,29 +1424,52 @@ export default function App() {
                       {d.name} ({d.biomes.length} Biomes)
                     </option>
                   ))}
+                  <option value="custom_sandbox">
+                    Custom Sandbox ({customSandboxBiomes.length} Biomes)
+                  </option>
                 </select>
               </div>
             </div>
 
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <h2 className="text-sm font-semibold tracking-wider uppercase text-white flex items-center gap-2">
                 <Sliders className="h-4 w-4 text-[#ff7043]" />
                 {selectedDimension.name} Biomes
               </h2>
-              <button 
-                onClick={() => {
-                  setBiomes(selectedDimension.biomes);
-                  setFixedTemp(selectedDimension.defaultFixed.temp);
-                  setFixedHum(selectedDimension.defaultFixed.hum);
-                  setFixedCont(selectedDimension.defaultFixed.cont);
-                  setFixedEros(selectedDimension.defaultFixed.eros);
-                  setFixedWeird(selectedDimension.defaultFixed.weird);
-                }}
-                className="text-xs text-[#ff7043] hover:text-white transition flex items-center gap-1 bg-[#1a1111] border border-[#5c1414] px-3 py-1.5 rounded"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                Reset Ranges
-              </button>
+              {selectedDimensionId === "custom_sandbox" ? (
+                <div className="flex flex-wrap gap-2">
+                  <button 
+                    onClick={handleAddCustomBiome}
+                    className="text-xs text-white hover:text-white transition flex items-center gap-1.5 bg-[#142320] border border-[#1b5e20] hover:border-[#2e7d32] px-3 py-1.5 rounded cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5 text-[#4db6ac]" />
+                    Add Custom Biome
+                  </button>
+                  <button 
+                    onClick={handleClearAllSandbox}
+                    className="text-xs text-red-400 hover:text-red-300 transition flex items-center gap-1 bg-[#1a0f0f] border border-[#5c1414] px-3 py-1.5 rounded cursor-pointer"
+                    title="Delete all sandbox configurations"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                    Clear All
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => {
+                    setBiomes(selectedDimension.biomes);
+                    setFixedTemp(selectedDimension.defaultFixed.temp);
+                    setFixedHum(selectedDimension.defaultFixed.hum);
+                    setFixedCont(selectedDimension.defaultFixed.cont);
+                    setFixedEros(selectedDimension.defaultFixed.eros);
+                    setFixedWeird(selectedDimension.defaultFixed.weird);
+                  }}
+                  className="text-xs text-[#ff7043] hover:text-white transition flex items-center gap-1 bg-[#1a1111] border border-[#5c1414] px-3 py-1.5 rounded"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Reset Ranges
+                </button>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2 mb-4 bg-[#110d0d] p-2.5 rounded border border-[#201414]">
@@ -1313,205 +1485,272 @@ export default function App() {
                 }}
                 className="text-[11px] text-white bg-[#1a1313] hover:bg-[#2c2020] border border-[#2e2020] px-2 py-1 rounded transition"
               >
-                Default {selectedDimension.name}
+                {selectedDimensionId === "custom_sandbox" ? "Reset to Sandbox Defaults" : `Default ${selectedDimension.name}`}
               </button>
-              <button
-                onClick={() => {
-                  handleApplyGlobalPreset("equal");
-                }}
-                className="text-[11px] text-[#ff7043] bg-[#221210] hover:bg-[#3d1a15] border border-[#521c15] px-2 py-1 rounded transition flex items-center gap-1"
-              >
-                All Equal Biomes ({(100 / biomes.length).toFixed(3)}% each)
-              </button>
+              {biomes.length > 0 && (
+                <button
+                  onClick={() => {
+                    handleApplyGlobalPreset("equal");
+                  }}
+                  className="text-[11px] text-[#ff7043] bg-[#221210] hover:bg-[#3d1a15] border border-[#521c15] px-2 py-1 rounded transition flex items-center gap-1"
+                >
+                  All Equal Biomes ({(100 / biomes.length).toFixed(3)}% each)
+                </button>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {biomes.map(biome => {
-                const isSelected = biome.id === selectedBiomeId;
-                const rarityInfo = biomeRarities.find(r => r.id === biome.id);
-                return (
-                  <button
-                    key={biome.id}
-                    onClick={() => setSelectedBiomeId(biome.id)}
-                    className={`p-3 rounded-lg text-left border transition flex flex-col gap-1.5 ${
-                      isSelected 
-                        ? "bg-[#1f1616] border-[#ff7043] text-white" 
-                        : "bg-[#0d0909] border-[#201414] hover:border-[#3a2c2c] text-[#a4a090]"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: biome.color }} />
-                      <span className="font-semibold text-xs truncate">{biome.name}</span>
+            {biomes.length === 0 ? (
+              <div className="bg-[#110d0d] border border-dashed border-[#3a2c2c] rounded-lg p-8 text-center flex flex-col items-center justify-center gap-3">
+                <Sliders className="h-8 w-8 text-[#8c8779] stroke-1 animate-pulse" />
+                <div className="text-xs text-[#a4a090] max-w-sm">
+                  Your custom sandbox is currently empty. Add your first custom biome to begin testing and simulation!
+                </div>
+                <button 
+                  onClick={handleAddCustomBiome}
+                  className="text-xs text-white hover:text-white transition flex items-center gap-1.5 bg-[#142320] border border-[#1b5e20] hover:border-[#2e7d32] px-4 py-2 rounded-lg font-bold cursor-pointer"
+                >
+                  <Plus className="h-4 w-4 text-[#4db6ac]" />
+                  Create First Custom Biome
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                {biomes.map(biome => {
+                  const isSelected = biome.id === selectedBiomeId;
+                  const rarityInfo = biomeRarities.find(r => r.id === biome.id);
+                  return (
+                    <div
+                      key={biome.id}
+                      onClick={() => setSelectedBiomeId(biome.id)}
+                      className={`p-3 rounded-lg text-left border transition flex flex-col gap-1.5 relative cursor-pointer ${
+                        isSelected 
+                          ? "bg-[#1f1616] border-[#ff7043] text-white" 
+                          : "bg-[#0d0909] border-[#201414] hover:border-[#3a2c2c] text-[#a4a090]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1.5 w-full">
+                        <div className="flex items-center gap-2 truncate flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+                          {selectedDimensionId === "custom_sandbox" ? (
+                            <>
+                              <input
+                                type="color"
+                                value={biome.color}
+                                onChange={(e) => handleUpdateCustomBiomeColor(biome.id, e.target.value)}
+                                className="w-4 h-4 rounded cursor-pointer border-0 p-0 bg-transparent shrink-0 focus:outline-none"
+                                title="Click to change color"
+                              />
+                              <input
+                                type="text"
+                                value={biome.name}
+                                onChange={(e) => handleUpdateCustomBiomeName(biome.id, e.target.value)}
+                                className="bg-transparent border-b border-transparent hover:border-[#ff7043]/30 focus:border-[#ff7043] text-white font-semibold text-xs truncate focus:outline-none w-full py-0.5 font-mono"
+                                placeholder="Biome Name"
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: biome.color }} />
+                              <span className="font-semibold text-xs truncate font-mono">{biome.name}</span>
+                            </>
+                          )}
+                        </div>
+
+                        {selectedDimensionId === "custom_sandbox" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteCustomBiome(biome.id);
+                            }}
+                            className="p-1 text-[#8c8779] hover:text-red-400 rounded hover:bg-[#2c1313] transition shrink-0 cursor-pointer"
+                            title="Delete Custom Biome"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      
+                      <div className="text-[10px] text-[#8c8779] flex items-center justify-between mt-1">
+                        <span>Rarity:</span>
+                        <span className={`font-mono font-medium ${rarityInfo?.colorClass}`}>
+                          {rarityInfo ? rarityInfo.spacePercent.toFixed(4) : "0"}%
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-[10px] text-[#8c8779] flex items-center justify-between">
-                      <span>Rarity:</span>
-                      <span className={`font-mono font-medium ${rarityInfo?.colorClass}`}>
-                        {rarityInfo ? rarityInfo.spacePercent.toFixed(4) : "0"}%
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* ACTIVE BIOME DETAILED PARAMETER SLIDERS */}
           <div className="bg-[#0c0909] border border-[#1c1414] rounded-lg p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#1c1414] pb-3 mb-4 gap-2">
-              <div className="flex items-center gap-2">
-                <span className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: selectedBiome.color }} />
-                <h3 className="text-sm font-bold text-white">{selectedBiome.name} Range Settings</h3>
-              </div>
-              
-              <div className="flex items-center gap-1.5 bg-[#1f1512] border border-[#ff7043]/30 px-2.5 py-1.5 rounded-lg text-xs">
-                <Sparkles className="h-3.5 w-3.5 text-[#ff7043] animate-pulse" />
-                <span className="text-[#ff7043] font-medium">{selectedBiome.name} Presets:</span>
-                <div className="flex gap-1 ml-1">
-                  <button 
-                    onClick={() => handleApplyPreset("moderate")}
-                    className="px-2 py-0.5 rounded bg-[#ff7043] hover:bg-[#ff8a65] text-[#080808] font-bold text-[10px] transition"
-                    title="Expands ranges around coordinate center to boost absolute generation chance."
-                  >
-                    Moderate
-                  </button>
-                  <button 
-                    onClick={() => handleApplyPreset("frequent")}
-                    className="px-2 py-0.5 rounded bg-[#d84315] hover:bg-[#ff7043] text-white font-bold text-[10px] transition"
-                    title="Significantly broadens range boundaries to make the biome common."
-                  >
-                    Frequent
-                  </button>
-                  <button 
-                    onClick={() => handleApplyPreset("restored")}
-                    className="px-2 py-0.5 rounded bg-[#201414] text-[#8c8779] hover:text-white text-[10px] transition"
-                    title="Restores this biome to original mod repository settings."
-                  >
-                    Default
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Smart Rarity Rebalancer controls */}
-            <div className="bg-[#110d0d] border border-[#231a1a] rounded-lg p-3 mb-4 flex flex-col gap-3">
-              <div>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="text-[8px] bg-[#3e1a17] text-[#ff7043] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">SYSTEM PRESET</span>
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wide">Proportional Rarity Auto-Balancer</h4>
-                </div>
-                <p className="text-[11px] text-[#8c8779]">
-                  Scale <strong>{selectedBiome.name}</strong>'s volume. Other boundaries adapt to maintain world equilibrium.
+            {!selectedBiome ? (
+              <div className="text-center py-12 flex flex-col items-center justify-center gap-3">
+                <Sliders className="h-10 w-10 text-[#8c8779] stroke-1" />
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">No Biome Selected</h3>
+                <p className="text-xs text-[#a4a090] max-w-sm">
+                  Add a custom biome above or select an existing one to configure its detailed 5D climate target parameters.
                 </p>
               </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full">
-                <button
-                  onClick={() => handleScaleAndBalance(selectedBiomeId, 1.5)}
-                  className="px-2 py-1.5 text-center text-[10px] font-semibold rounded bg-[#ff7043]/10 hover:bg-[#ff7043]/20 text-[#ff7043] border border-[#ff7043]/25 transition cursor-pointer whitespace-nowrap overflow-hidden text-ellipsis"
-                  title="Expands dimensions by factor of ~1.08 each, shrinking other biomes proportionately."
-                >
-                  Increase Rarity (+50%)
-                </button>
-                <button
-                  onClick={() => handleScaleAndBalance(selectedBiomeId, 2.0)}
-                  className="px-2 py-1.5 text-center text-[10px] font-semibold rounded bg-[#ff7043] hover:bg-[#ff8a65] text-[#080808] transition cursor-pointer whitespace-nowrap overflow-hidden text-ellipsis"
-                  title="Expands dimensions by factor of ~1.15 each, shrinking other biomes proportionately."
-                >
-                  Double Rarity (2x)
-                </button>
-                <button
-                  onClick={() => handleScaleAndBalance(selectedBiomeId, 0.5)}
-                  className="px-2 py-1.5 text-center text-[10px] font-semibold rounded bg-[#1a1313] hover:bg-[#2c2020] text-white border border-[#2e2020] transition cursor-pointer whitespace-nowrap overflow-hidden text-ellipsis"
-                  title="Shrinks dimensions by factor of ~0.87 each, expanding other biomes proportionately."
-                >
-                  Halve Rarity (0.5x)
-                </button>
-                <button
-                  onClick={() => handleScaleAndBalance(selectedBiomeId, 0.1)}
-                  className="px-2 py-1.5 text-center text-[10px] font-semibold rounded bg-red-950/20 hover:bg-red-900/35 text-red-400 border border-red-900/30 transition cursor-pointer whitespace-nowrap overflow-hidden text-ellipsis"
-                  title="Shrinks dimensions by factor of ~0.63 each, expanding other biomes proportionately."
-                >
-                  Ultra Rare (0.1x)
-                </button>
-              </div>
-            </div>
-
-            {/* Slider List */}
-            <div className="flex flex-col gap-5">
-              {([
-                { key: "temp", name: "Temperature", colorClass: "text-[#ff8a65]", desc: "Determines hot vs cold biome thresholds" },
-                { key: "hum", name: "Humidity", colorClass: "text-[#4db6ac]", desc: "Wet/dry conditions (rain forest to barrens)" },
-                { key: "cont", name: "Continentalness", colorClass: "text-[#9ccc65]", desc: "Distance to ocean/inland depth zones" },
-                { key: "eros", name: "Erosion", colorClass: "text-[#64b5f6]", desc: "Flatness vs steep mountains" },
-                { key: "weird", name: "Weirdness", colorClass: "text-[#ba68c8]", desc: "Signifies variant non-standard geography" }
-              ] as const).map((dim) => {
-                const value = selectedBiome[dim.key];
-                return (
-                  <div key={dim.key} className="bg-[#0e0a0a] border border-[#1a1313] p-3 rounded-lg">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-baseline gap-2">
-                        <span className={`text-xs font-bold uppercase ${dim.colorClass}`}>{dim.name}</span>
-                        <span className="text-[10px] text-[#70685c]">{dim.desc}</span>
-                      </div>
-                      <div className="flex gap-3 text-xs font-mono">
-                        <span className="text-[#8c8779]">Min: <strong className="text-white">{value.min.toFixed(4)}</strong></span>
-                        <span className="text-[#8c8779]">Max: <strong className="text-white">{value.max.toFixed(4)}</strong></span>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* Min Limit */}
-                      <div className="bg-[#110d0d] p-3 rounded border border-[#201414]">
-                        <div className="flex items-center justify-between text-[11px] text-[#8c8779] mb-1.5 font-mono">
-                          <span>Minimum limit</span>
-                          {value.min > value.max && <span className="text-red-400 text-[10px]">Min &gt; Max</span>}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <PreciseNumberInput
-                            value={value.min}
-                            onChange={(val) => handleRangeChange(selectedBiomeId, dim.key, "min", val)}
-                            className="w-20 bg-[#070505] border border-[#3e2723] rounded px-2 py-1 text-white text-xs font-mono text-center focus:outline-none focus:border-[#ff7043]"
-                          />
-                          <input 
-                            type="range" 
-                            min="-5.0" 
-                            max="5.0" 
-                            step="0.001"
-                            value={value.min} 
-                            onChange={(e) => handleRangeChange(selectedBiomeId, dim.key, "min", parseFloat(e.target.value))}
-                            className="flex-1 accent-[#ff7043] bg-[#201414] h-1 rounded appearance-none cursor-pointer"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Max Limit */}
-                      <div className="bg-[#110d0d] p-3 rounded border border-[#201414]">
-                        <div className="flex items-center justify-between text-[11px] text-[#8c8779] mb-1.5 font-mono">
-                          <span>Maximum limit</span>
-                          {value.min > value.max && <span className="text-red-400 text-[10px]">Min &gt; Max</span>}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <PreciseNumberInput
-                            value={value.max}
-                            onChange={(val) => handleRangeChange(selectedBiomeId, dim.key, "max", val)}
-                            className="w-20 bg-[#070505] border border-[#3e2723] rounded px-2 py-1 text-white text-xs font-mono text-center focus:outline-none focus:border-[#ff7043]"
-                          />
-                          <input 
-                            type="range" 
-                            min="-5.0" 
-                            max="5.0" 
-                            step="0.001"
-                            value={value.max} 
-                            onChange={(e) => handleRangeChange(selectedBiomeId, dim.key, "max", parseFloat(e.target.value))}
-                            className="flex-1 accent-[#ff7043] bg-[#201414] h-1 rounded appearance-none cursor-pointer"
-                          />
-                        </div>
-                      </div>
+            ) : (
+              <>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#1c1414] pb-3 mb-4 gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: selectedBiome.color }} />
+                    <h3 className="text-sm font-bold text-white">{selectedBiome.name} Range Settings</h3>
+                  </div>
+                  
+                  <div className="flex items-center gap-1.5 bg-[#1f1512] border border-[#ff7043]/30 px-2.5 py-1.5 rounded-lg text-xs">
+                    <Sparkles className="h-3.5 w-3.5 text-[#ff7043] animate-pulse" />
+                    <span className="text-[#ff7043] font-medium">{selectedBiome.name} Presets:</span>
+                    <div className="flex gap-1 ml-1">
+                      <button 
+                        onClick={() => handleApplyPreset("moderate")}
+                        className="px-2 py-0.5 rounded bg-[#ff7043] hover:bg-[#ff8a65] text-[#080808] font-bold text-[10px] transition cursor-pointer"
+                        title="Expands ranges around coordinate center to boost absolute generation chance."
+                      >
+                        Moderate
+                      </button>
+                      <button 
+                        onClick={() => handleApplyPreset("frequent")}
+                        className="px-2 py-0.5 rounded bg-[#d84315] hover:bg-[#ff7043] text-white font-bold text-[10px] transition cursor-pointer"
+                        title="Significantly broadens range boundaries to make the biome common."
+                      >
+                        Frequent
+                      </button>
+                      <button 
+                        onClick={() => handleApplyPreset("restored")}
+                        className="px-2 py-0.5 rounded bg-[#201414] text-[#8c8779] hover:text-white text-[10px] transition cursor-pointer"
+                        title="Restores this biome to original mod repository settings."
+                      >
+                        Default
+                      </button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+
+                {/* Smart Rarity Rebalancer controls */}
+                <div className="bg-[#110d0d] border border-[#231a1a] rounded-lg p-3 mb-4 flex flex-col gap-3">
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-[8px] bg-[#3e1a17] text-[#ff7043] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">SYSTEM PRESET</span>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wide">Proportional Rarity Auto-Balancer</h4>
+                    </div>
+                    <p className="text-[11px] text-[#8c8779]">
+                      Scale <strong>{selectedBiome.name}</strong>'s volume. Other boundaries adapt to maintain world equilibrium.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full">
+                    <button
+                      onClick={() => handleScaleAndBalance(selectedBiomeId, 1.5)}
+                      className="px-2 py-1.5 text-center text-[10px] font-semibold rounded bg-[#ff7043]/10 hover:bg-[#ff7043]/20 text-[#ff7043] border border-[#ff7043]/25 transition cursor-pointer whitespace-nowrap overflow-hidden text-ellipsis"
+                      title="Expands dimensions by factor of ~1.08 each, shrinking other biomes proportionately."
+                    >
+                      Increase Rarity (+50%)
+                    </button>
+                    <button
+                      onClick={() => handleScaleAndBalance(selectedBiomeId, 2.0)}
+                      className="px-2 py-1.5 text-center text-[10px] font-semibold rounded bg-[#ff7043] hover:bg-[#ff8a65] text-[#080808] transition cursor-pointer whitespace-nowrap overflow-hidden text-ellipsis"
+                      title="Expands dimensions by factor of ~1.15 each, shrinking other biomes proportionately."
+                    >
+                      Double Rarity (2x)
+                    </button>
+                    <button
+                      onClick={() => handleScaleAndBalance(selectedBiomeId, 0.5)}
+                      className="px-2 py-1.5 text-center text-[10px] font-semibold rounded bg-[#1a1313] hover:bg-[#2c2020] text-white border border-[#2e2020] transition cursor-pointer whitespace-nowrap overflow-hidden text-ellipsis"
+                      title="Shrinks dimensions by factor of ~0.87 each, expanding other biomes proportionately."
+                    >
+                      Halve Rarity (0.5x)
+                    </button>
+                    <button
+                      onClick={() => handleScaleAndBalance(selectedBiomeId, 0.1)}
+                      className="px-2 py-1.5 text-center text-[10px] font-semibold rounded bg-red-950/20 hover:bg-red-900/35 text-red-400 border border-red-900/30 transition cursor-pointer whitespace-nowrap overflow-hidden text-ellipsis"
+                      title="Shrinks dimensions by factor of ~0.63 each, expanding other biomes proportionately."
+                    >
+                      Ultra Rare (0.1x)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Slider List */}
+                <div className="flex flex-col gap-5">
+                  {([
+                    { key: "temp", name: "Temperature", colorClass: "text-[#ff8a65]", desc: "Determines hot vs cold biome thresholds" },
+                    { key: "hum", name: "Humidity", colorClass: "text-[#4db6ac]", desc: "Wet/dry conditions (rain forest to barrens)" },
+                    { key: "cont", name: "Continentalness", colorClass: "text-[#9ccc65]", desc: "Distance to ocean/inland depth zones" },
+                    { key: "eros", name: "Erosion", colorClass: "text-[#64b5f6]", desc: "Flatness vs steep mountains" },
+                    { key: "weird", name: "Weirdness", colorClass: "text-[#ba68c8]", desc: "Signifies variant non-standard geography" }
+                  ] as const).map((dim) => {
+                    const value = selectedBiome[dim.key];
+                    return (
+                      <div key={dim.key} className="bg-[#0e0a0a] border border-[#1a1313] p-3 rounded-lg font-mono">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-baseline gap-2">
+                            <span className={`text-xs font-bold uppercase ${dim.colorClass}`}>{dim.name}</span>
+                            <span className="text-[10px] text-[#70685c]">{dim.desc}</span>
+                          </div>
+                          <div className="flex gap-3 text-xs font-mono">
+                            <span className="text-[#8c8779]">Min: <strong className="text-white">{value.min.toFixed(4)}</strong></span>
+                            <span className="text-[#8c8779]">Max: <strong className="text-white">{value.max.toFixed(4)}</strong></span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {/* Min Limit */}
+                          <div className="bg-[#110d0d] p-3 rounded border border-[#201414]">
+                            <div className="flex items-center justify-between text-[11px] text-[#8c8779] mb-1.5 font-mono">
+                              <span>Minimum limit</span>
+                              {value.min > value.max && <span className="text-red-400 text-[10px]">Min &gt; Max</span>}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <PreciseNumberInput
+                                value={value.min}
+                                onChange={(val) => handleRangeChange(selectedBiomeId, dim.key, "min", val)}
+                                className="w-20 bg-[#070505] border border-[#3e2723] rounded px-2 py-1 text-white text-xs font-mono text-center focus:outline-none focus:border-[#ff7043]"
+                              />
+                              <input 
+                                type="range" 
+                                min="-5.0" 
+                                max="5.0" 
+                                step="0.001"
+                                value={value.min} 
+                                onChange={(e) => handleRangeChange(selectedBiomeId, dim.key, "min", parseFloat(e.target.value))}
+                                className="flex-1 accent-[#ff7043] bg-[#201414] h-1 rounded appearance-none cursor-pointer"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Max Limit */}
+                          <div className="bg-[#110d0d] p-3 rounded border border-[#201414]">
+                            <div className="flex items-center justify-between text-[11px] text-[#8c8779] mb-1.5 font-mono">
+                              <span>Maximum limit</span>
+                              {value.min > value.max && <span className="text-red-400 text-[10px]">Min &gt; Max</span>}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <PreciseNumberInput
+                                value={value.max}
+                                onChange={(val) => handleRangeChange(selectedBiomeId, dim.key, "max", val)}
+                                className="w-20 bg-[#070505] border border-[#3e2723] rounded px-2 py-1 text-white text-xs font-mono text-center focus:outline-none focus:border-[#ff7043]"
+                              />
+                              <input 
+                                type="range" 
+                                min="-5.0" 
+                                max="5.0" 
+                                step="0.001"
+                                value={value.max} 
+                                onChange={(e) => handleRangeChange(selectedBiomeId, dim.key, "max", parseFloat(e.target.value))}
+                                className="flex-1 accent-[#ff7043] bg-[#201414] h-1 rounded appearance-none cursor-pointer"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
 
           {/* OVERLAP AND CONFLICT ANALYZER */}
