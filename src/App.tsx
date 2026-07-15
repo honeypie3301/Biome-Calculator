@@ -267,8 +267,8 @@ const calculatePointVolume = (pt: ClimatePoint) => {
 export default function App() {
   // Dimension state: custom Backwoods dimensions, Vanilla, or custom_sandbox
   const [selectedDimensionId, setSelectedDimensionId] = useState<string>("the_grain");
-  const [customSandboxBiomes, setCustomSandboxBiomes] = useState<Biome[]>(() => {
-    const saved = localStorage.getItem("custom_sandbox_biomes_v2");
+  const [dimensionBiomes, setDimensionBiomes] = useState<{ [dimId: string]: Biome[] }>(() => {
+    const saved = localStorage.getItem("all_dimension_biomes_v1");
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -276,22 +276,25 @@ export default function App() {
         // Fallback
       }
     }
-    return DEFAULT_SANDBOX_BIOMES;
+    const initial: { [dimId: string]: Biome[] } = {};
+    for (const d of BACKWOODS_DIMENSIONS) {
+      initial[d.id] = d.biomes;
+    }
+    for (const d of VANILLA_DIMENSIONS) {
+      initial[d.id] = d.biomes;
+    }
+    initial["custom_sandbox"] = DEFAULT_SANDBOX_BIOMES;
+    return initial;
   });
 
-  // State holding active biomes for the chosen dimension
-  const [biomes, setBiomes] = useState<Biome[]>([]);
-
+  // LocalStorage persistence for all dimension biomes
   useEffect(() => {
-    if (selectedDimensionId === "custom_sandbox") {
-      setBiomes(customSandboxBiomes);
-    } else {
-      const dim = BACKWOODS_DIMENSIONS.find(d => d.id === selectedDimensionId) || 
-                  VANILLA_DIMENSIONS.find(d => d.id === selectedDimensionId) || 
-                  BACKWOODS_DIMENSIONS[0];
-      setBiomes(dim.biomes);
-    }
-  }, [selectedDimensionId, customSandboxBiomes]);
+    localStorage.setItem("all_dimension_biomes_v1", JSON.stringify(dimensionBiomes));
+  }, [dimensionBiomes]);
+
+  const biomes = useMemo(() => {
+    return dimensionBiomes[selectedDimensionId] || [];
+  }, [dimensionBiomes, selectedDimensionId]);
 
   // Selected biome for manual point details / sliders
   const [selectedBiomeId, setSelectedBiomeId] = useState<string>("splinter_nest");
@@ -469,26 +472,38 @@ export default function App() {
     }
   };
 
-  // LocalStorage persistence for Custom Sandbox biomes
-  useEffect(() => {
-    localStorage.setItem("custom_sandbox_biomes_v2", JSON.stringify(customSandboxBiomes));
-  }, [customSandboxBiomes]);
-
   const handleUpdateCustomBiomeColor = (biomeId: string, color: string) => {
-    setCustomSandboxBiomes(prev => prev.map(b => b.id === biomeId ? { ...b, color } : b));
+    setDimensionBiomes(prev => {
+      const current = prev[selectedDimensionId] || [];
+      const updated = current.map(b => b.id === biomeId ? { ...b, color } : b);
+      return { ...prev, [selectedDimensionId]: updated };
+    });
   };
 
   const handleUpdateCustomBiomeName = (biomeId: string, name: string) => {
-    setCustomSandboxBiomes(prev => prev.map(b => b.id === biomeId ? { ...b, name } : b));
+    setDimensionBiomes(prev => {
+      const current = prev[selectedDimensionId] || [];
+      const updated = current.map(b => b.id === biomeId ? { ...b, name } : b);
+      return { ...prev, [selectedDimensionId]: updated };
+    });
+  };
+
+  const handleUpdateCustomBiomeBaseRarity = (biomeId: string, baseRarity: number) => {
+    setDimensionBiomes(prev => {
+      const current = prev[selectedDimensionId] || [];
+      const updated = current.map(b => b.id === biomeId ? { ...b, baseRarity: parseFloat(Math.max(0.0001, Math.min(100.0, baseRarity)).toFixed(4)) } : b);
+      return { ...prev, [selectedDimensionId]: updated };
+    });
   };
 
   const handleAddCustomBiome = () => {
+    const current = dimensionBiomes[selectedDimensionId] || [];
     const id = `custom_biome_${Date.now()}`;
     const newBiome: Biome = {
       id,
-      name: `Custom Biome ${customSandboxBiomes.length + 1}`,
+      name: `Custom Biome ${current.length + 1}`,
       color: `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`,
-      description: "A user-defined custom sandbox biome with adjustable 6D climate placement regions.",
+      description: "A custom biome with adjustable 6D climate placement regions.",
       baseRarity: 1.0,
       points: [
         {
@@ -501,57 +516,72 @@ export default function App() {
         }
       ]
     };
-    setCustomSandboxBiomes(prev => [...prev, newBiome]);
+    setDimensionBiomes(prev => {
+      const cur = prev[selectedDimensionId] || [];
+      return { ...prev, [selectedDimensionId]: [...cur, newBiome] };
+    });
     setSelectedBiomeId(id);
   };
 
   const handleDeleteCustomBiome = (biomeId: string) => {
-    const updated = customSandboxBiomes.filter(b => b.id !== biomeId);
-    setCustomSandboxBiomes(updated);
-    if (selectedBiomeId === biomeId) {
-      setSelectedBiomeId(updated[0]?.id || "");
-    }
+    setDimensionBiomes(prev => {
+      const current = prev[selectedDimensionId] || [];
+      const updated = current.filter(b => b.id !== biomeId);
+      if (selectedBiomeId === biomeId) {
+        setSelectedBiomeId(updated[0]?.id || "");
+      }
+      return { ...prev, [selectedDimensionId]: updated };
+    });
   };
 
   // Manage Sandbox Biome placement points
   const handleAddPointToSelectedBiome = () => {
-    if (selectedDimensionId !== "custom_sandbox") return;
-    setCustomSandboxBiomes(prev => prev.map(b => {
-      if (b.id !== selectedBiomeId) return b;
-      return {
-        ...b,
-        points: [
-          ...b.points,
-          {
-            temp: { min: -0.2, max: 0.2 },
-            hum: { min: -0.2, max: 0.2 },
-            cont: { min: -0.2, max: 0.2 },
-            eros: { min: -0.2, max: 0.2 },
-            weird: { min: -0.2, max: 0.2 },
-            depth: { min: -0.2, max: 0.2 }
-          }
-        ]
-      };
-    }));
+    setDimensionBiomes(prev => {
+      const current = prev[selectedDimensionId] || [];
+      const updated = current.map(b => {
+        if (b.id !== selectedBiomeId) return b;
+        return {
+          ...b,
+          points: [
+            ...b.points,
+            {
+              temp: { min: -0.2, max: 0.2 },
+              hum: { min: -0.2, max: 0.2 },
+              cont: { min: -0.2, max: 0.2 },
+              eros: { min: -0.2, max: 0.2 },
+              weird: { min: -0.2, max: 0.2 },
+              depth: { min: -0.2, max: 0.2 }
+            }
+          ]
+        };
+      });
+      return { ...prev, [selectedDimensionId]: updated };
+    });
+
     // Select the newly added point
-    const currentBiome = customSandboxBiomes.find(b => b.id === selectedBiomeId);
+    const currentList = dimensionBiomes[selectedDimensionId] || [];
+    const currentBiome = currentList.find(b => b.id === selectedBiomeId);
     if (currentBiome) {
       setSelectedPointIndex(currentBiome.points.length);
     }
   };
 
   const handleDeletePointFromSelectedBiome = (idx: number) => {
-    if (selectedDimensionId !== "custom_sandbox") return;
-    const currentBiome = customSandboxBiomes.find(b => b.id === selectedBiomeId);
+    const currentList = dimensionBiomes[selectedDimensionId] || [];
+    const currentBiome = currentList.find(b => b.id === selectedBiomeId);
     if (!currentBiome || currentBiome.points.length <= 1) return;
 
-    setCustomSandboxBiomes(prev => prev.map(b => {
-      if (b.id !== selectedBiomeId) return b;
-      return {
-        ...b,
-        points: b.points.filter((_, pIdx) => pIdx !== idx)
-      };
-    }));
+    setDimensionBiomes(prev => {
+      const current = prev[selectedDimensionId] || [];
+      const updated = current.map(b => {
+        if (b.id !== selectedBiomeId) return b;
+        return {
+          ...b,
+          points: b.points.filter((_, pIdx) => pIdx !== idx)
+        };
+      });
+      return { ...prev, [selectedDimensionId]: updated };
+    });
     setSelectedPointIndex(0);
   };
 
@@ -562,53 +592,79 @@ export default function App() {
     bound: "min" | "max",
     val: number
   ) => {
-    if (selectedDimensionId !== "custom_sandbox") return;
-    setCustomSandboxBiomes(prev => prev.map(b => {
-      if (b.id !== biomeId) return b;
-      return {
-        ...b,
-        points: b.points.map((p, pIdx) => {
-          if (pIdx !== pointIdx) return p;
-          return {
-            ...p,
-            [dim]: {
-              ...p[dim],
-              [bound]: parseFloat(val.toFixed(4))
-            }
-          };
-        })
-      };
-    }));
+    setDimensionBiomes(prev => {
+      const current = prev[selectedDimensionId] || [];
+      const updated = current.map(b => {
+        if (b.id !== biomeId) return b;
+        return {
+          ...b,
+          points: b.points.map((p, pIdx) => {
+            if (pIdx !== pointIdx) return p;
+            return {
+              ...p,
+              [dim]: {
+                ...p[dim],
+                [bound]: parseFloat(val.toFixed(4))
+              }
+            };
+          })
+        };
+      });
+      return { ...prev, [selectedDimensionId]: updated };
+    });
   };
 
   // Helper slider/scale to multiply point size
   const handleScaleAndBalance = (factor: number) => {
-    if (selectedDimensionId !== "custom_sandbox") return;
-    setCustomSandboxBiomes(prev => prev.map(b => {
-      if (b.id !== selectedBiomeId) return b;
-      return {
-        ...b,
-        points: b.points.map((p, pIdx) => {
-          if (pIdx !== selectedPointIndex) return p;
-          const scaleDim = (range: ClimateRange) => {
-            const center = (range.min + range.max) / 2;
-            const radius = (range.max - range.min) / 2 * factor;
-            return {
-              min: parseFloat(Math.max(-5.0, center - radius).toFixed(4)),
-              max: parseFloat(Math.min(5.0, center + radius).toFixed(4))
+    setDimensionBiomes(prev => {
+      const current = prev[selectedDimensionId] || [];
+      const updated = current.map(b => {
+        if (b.id !== selectedBiomeId) return b;
+        return {
+          ...b,
+          points: b.points.map((p, pIdx) => {
+            if (pIdx !== selectedPointIndex) return p;
+            const scaleDim = (range: ClimateRange) => {
+              const center = (range.min + range.max) / 2;
+              const radius = (range.max - range.min) / 2 * factor;
+              return {
+                min: parseFloat(Math.max(-5.0, center - radius).toFixed(4)),
+                max: parseFloat(Math.min(5.0, center + radius).toFixed(4))
+              };
             };
-          };
-          return {
-            temp: scaleDim(p.temp),
-            hum: scaleDim(p.hum),
-            cont: scaleDim(p.cont),
-            eros: scaleDim(p.eros),
-            weird: scaleDim(p.weird),
-            depth: scaleDim(p.depth)
-          };
-        })
-      };
-    }));
+            return {
+              temp: scaleDim(p.temp),
+              hum: scaleDim(p.hum),
+              cont: scaleDim(p.cont),
+              eros: scaleDim(p.eros),
+              weird: scaleDim(p.weird),
+              depth: scaleDim(p.depth)
+            };
+          })
+        };
+      });
+      return { ...prev, [selectedDimensionId]: updated };
+    });
+  };
+
+  const handleRestoreDimensionDefaults = () => {
+    let defaults: Biome[] = [];
+    if (selectedDimensionId === "custom_sandbox") {
+      defaults = DEFAULT_SANDBOX_BIOMES;
+    } else {
+      const dim = BACKWOODS_DIMENSIONS.find(d => d.id === selectedDimensionId) || 
+                  VANILLA_DIMENSIONS.find(d => d.id === selectedDimensionId);
+      if (dim) {
+        defaults = dim.biomes;
+      }
+    }
+    if (defaults.length > 0) {
+      setDimensionBiomes(prev => ({
+        ...prev,
+        [selectedDimensionId]: defaults
+      }));
+      setSelectedBiomeId(defaults[0]?.id || "");
+    }
   };
 
   // Rarity calculations based on 6D climate point hypervolumes and baseRarity
@@ -666,10 +722,12 @@ export default function App() {
       let matchedPointIdx = 0;
 
       biome.points.forEach((pt, idx) => {
-        const dist = calculatePointDistance(
+        const rawDist = calculatePointDistance(
           routerTemp, routerHum, routerCont, routerEros, routerWeird, routerDepth,
           pt
         );
+        // Apply baseRarity as a divisor to scale down distance for high-weight biomes (making them match easier)
+        const dist = rawDist / (biome.baseRarity || 1.0);
         if (dist < minDistance) {
           minDistance = dist;
           matchedPointIdx = idx;
@@ -760,7 +818,8 @@ export default function App() {
 
     for (const b of biomes) {
       for (const pt of b.points) {
-        const dist = calculatePointDistance(t, h, c, e, w, d, pt);
+        const rawDist = calculatePointDistance(t, h, c, e, w, d, pt);
+        const dist = rawDist / (b.baseRarity || 1.0);
         if (dist < minDistance) {
           minDistance = dist;
           bestBiome = b;
@@ -777,7 +836,8 @@ export default function App() {
         let matchedOcean = bestBiome;
         for (const b of oceanBiomes) {
           for (const pt of b.points) {
-            const dist = calculatePointDistance(t, h, c, e, w, d, pt);
+            const rawDist = calculatePointDistance(t, h, c, e, w, d, pt);
+            const dist = rawDist / (b.baseRarity || 1.0);
             if (dist < minOceanDist) {
               minOceanDist = dist;
               matchedOcean = b;
@@ -935,7 +995,8 @@ export default function App() {
         let minDistance = Infinity;
         if (matched) {
           matched.points.forEach(pt => {
-            const dist = calculatePointDistance(t, h, c, eros, w, d, pt);
+            const rawDist = calculatePointDistance(t, h, c, eros, w, d, pt);
+            const dist = rawDist / (matched.baseRarity || 1.0);
             if (dist < minDistance) minDistance = dist;
           });
         }
@@ -985,7 +1046,8 @@ export default function App() {
         let minDistance = Infinity;
         if (matched) {
           matched.points.forEach(pt => {
-            const dist = calculatePointDistance(t, h, c, eVal, w, d, pt);
+            const rawDist = calculatePointDistance(t, h, c, eVal, w, d, pt);
+            const dist = rawDist / (matched.baseRarity || 1.0);
             if (dist < minDistance) minDistance = dist;
           });
         }
@@ -1080,7 +1142,7 @@ export default function App() {
                     <option value="nether" className="text-white bg-[#050303]">Nether (5 Biomes)</option>
                   </optgroup>
                   <optgroup label="Sandbox Arena" className="text-gray-400 bg-[#0c0808]">
-                    <option value="custom_sandbox" className="text-white bg-[#050303]">Custom Sandbox ({customSandboxBiomes.length} Biomes)</option>
+                    <option value="custom_sandbox" className="text-white bg-[#050303]">Custom Sandbox ({(dimensionBiomes["custom_sandbox"] || []).length} Biomes)</option>
                   </optgroup>
                 </select>
               </div>
@@ -1101,14 +1163,12 @@ export default function App() {
                     Add Biome
                   </button>
                   <button 
-                    onClick={() => {
-                      setCustomSandboxBiomes([]);
-                      setSelectedBiomeId("");
-                    }}
+                    onClick={handleRestoreDimensionDefaults}
                     className="text-[11px] text-red-400 hover:bg-red-950/20 transition flex items-center gap-1 bg-[#1a0c0c] border border-[#5c1a1a] px-2.5 py-1.5 rounded cursor-pointer font-bold font-mono"
+                    title="Restore default biomes and settings for this dimension"
                   >
-                    <Trash2 className="h-3 w-3 text-red-500" />
-                    Reset
+                    <RefreshCw className="h-3 w-3 text-red-500" />
+                    Reset Sandbox
                   </button>
                 </div>
               )}
@@ -1118,6 +1178,7 @@ export default function App() {
               {biomes.map(b => {
                 const isSelected = b.id === selectedBiomeId;
                 const rarityInfo = biomeRarities.find(r => r.id === b.id);
+                const isEditable = selectedDimensionId === "custom_sandbox";
                 return (
                   <div
                     key={b.id}
@@ -1130,7 +1191,7 @@ export default function App() {
                   >
                     <div className="flex items-center justify-between gap-1.5 w-full">
                       <div className="flex items-center gap-1.5 truncate flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
-                        {selectedDimensionId === "custom_sandbox" ? (
+                        {isEditable ? (
                           <>
                             <input
                               type="color"
@@ -1149,11 +1210,11 @@ export default function App() {
                         ) : (
                           <>
                             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: b.color }} />
-                            <span className="font-semibold text-xs truncate font-mono">{b.name}</span>
+                            <span className="font-semibold text-xs truncate font-mono text-white">{b.name}</span>
                           </>
                         )}
                       </div>
-                      {selectedDimensionId === "custom_sandbox" && (
+                      {isEditable && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1176,6 +1237,197 @@ export default function App() {
               })}
             </div>
           </div>
+
+          {/* BIOME CONFIGURATION PLACEMENT POINTS */}
+          {selectedBiome && (
+            <div className="bg-[#0c0808] border border-[#1c1212] rounded-xl p-4 sm:p-5 flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#1c1212] pb-3 gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: selectedBiome.color }} />
+                  <div>
+                    <h3 className="text-sm font-bold text-white">{selectedBiome.name} Placement Regions</h3>
+                    <p className="text-[11px] text-[#8c8779] font-mono">This biome generates in {selectedBiome.points.length} distinct multi-noise region{selectedBiome.points.length > 1 ? "s" : ""}</p>
+                  </div>
+                </div>
+
+                {selectedDimensionId === "custom_sandbox" && (
+                  <button
+                    onClick={handleAddPointToSelectedBiome}
+                    className="text-[10px] text-emerald-400 hover:bg-[#203a20] transition bg-[#142914] border border-[#235e23] px-2 py-1 rounded font-mono cursor-pointer"
+                  >
+                    + Add Region
+                  </button>
+                )}
+              </div>
+
+              {/* Point Tabs */}
+              <div className="flex flex-wrap gap-1.5 border-b border-[#1f1313] pb-2">
+                {selectedBiome.points.map((pt, idx) => {
+                  const vol = calculatePointVolume(pt);
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedPointIndex(idx)}
+                      className={`px-3 py-1.5 text-xs font-mono rounded-lg border transition cursor-pointer flex items-center gap-1.5 ${
+                        selectedPointIndex === idx
+                          ? "bg-[#2c1512] text-white border-[#ff7043]"
+                          : "bg-[#0d0909] text-[#8c8779] border-transparent hover:border-[#3a2222]"
+                      }`}
+                    >
+                      Region #{idx + 1}
+                      <span className="text-[9px] bg-[#110c0c] px-1 py-0.5 rounded text-[#70685c]">
+                        Vol: {vol.toFixed(4)}
+                      </span>
+                      {selectedDimensionId === "custom_sandbox" && selectedBiome.points.length > 1 && (
+                        <span 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeletePointFromSelectedBiome(idx);
+                          }}
+                          className="text-red-400 hover:text-red-300 ml-1 font-bold text-[10px]"
+                        >
+                          ×
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {activePoint ? (
+                <div className="flex flex-col gap-4 mt-1">
+                  
+                  <div className="flex flex-col gap-3">
+                    <div className="bg-[#110c0c] border border-[#221313] rounded-lg p-3 flex flex-col gap-1.5">
+                      <span className="text-[10px] font-mono text-[#ff7043] font-bold uppercase tracking-wider block">Scale Active Region Space</span>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <button onClick={() => handleScaleAndBalance(1.35)} className="px-2 py-1.5 bg-[#ff7043]/10 hover:bg-[#ff7043]/20 border border-[#ff7043]/25 text-[#ff7043] rounded text-[11px] cursor-pointer font-mono font-semibold">+35% Scale</button>
+                        <button onClick={() => handleScaleAndBalance(1.75)} className="px-2 py-1.5 bg-[#ff7043]/20 hover:bg-[#ff7043]/30 border border-[#ff7043]/40 text-[#ff7043] rounded text-[11px] cursor-pointer font-mono font-semibold">+75% Scale</button>
+                        <button onClick={() => handleScaleAndBalance(0.5)} className="px-2 py-1.5 bg-[#1a0f0e] border border-[#3e1b17] hover:bg-[#2c1b18] text-white rounded text-[11px] cursor-pointer font-mono font-semibold">Halve (0.5x)</button>
+                        <button onClick={() => handleScaleAndBalance(2.0)} className="px-2 py-1.5 bg-[#1a0f0e] border border-[#3e1b17] hover:bg-[#2c1b18] text-white rounded text-[11px] cursor-pointer font-mono font-semibold">Double (2.0x)</button>
+                      </div>
+                    </div>
+
+                    <div className="bg-[#110c0c] border border-[#221313] rounded-lg p-3 flex flex-col gap-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                        <span className="text-[10px] font-mono text-[#4db6ac] font-bold uppercase tracking-wider block">Biome Generation Weight (Base Rarity)</span>
+                        <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                          <span className="text-[10px] text-[#70685c] font-mono">Current Weight:</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.0001"
+                            max="100.0"
+                            value={selectedBiome.baseRarity}
+                            onChange={(e) => handleUpdateCustomBiomeBaseRarity(selectedBiome.id, parseFloat(e.target.value) || 1.0)}
+                            className="w-16 bg-[#050303] border border-[#235e5e]/40 rounded px-1.5 py-0.5 text-white text-xs font-mono text-center focus:outline-none focus:border-[#4db6ac]"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <button 
+                          onClick={() => handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity * 2.0)} 
+                          className="px-2 py-1.5 bg-[#4db6ac]/10 hover:bg-[#4db6ac]/20 border border-[#4db6ac]/25 text-[#4db6ac] rounded text-[11px] cursor-pointer font-mono font-semibold"
+                          title="Double current generation weight"
+                        >
+                          Double Rarity (2x)
+                        </button>
+                        <button 
+                          onClick={() => handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity * 0.5)} 
+                          className="px-2 py-1.5 bg-[#101a18] border border-[#1b3e39] hover:bg-[#1a2e2b] text-white rounded text-[11px] cursor-pointer font-mono font-semibold"
+                          title="Halve current generation weight"
+                        >
+                          Half Rarity (0.5x)
+                        </button>
+                        <button 
+                          onClick={() => handleUpdateCustomBiomeBaseRarity(selectedBiome.id, 1.0)} 
+                          className="px-2 py-1.5 bg-[#0d0909] border border-[#1f1313] hover:bg-[#1f1313] text-[#70685c] rounded text-[11px] cursor-pointer font-mono"
+                          title="Set weight to standard common level (1.0)"
+                        >
+                          Common (1.0)
+                        </button>
+                        <button 
+                          onClick={() => handleUpdateCustomBiomeBaseRarity(selectedBiome.id, 0.15)} 
+                          className="px-2 py-1.5 bg-[#0d0909] border border-[#1f1313] hover:bg-[#1f1313] text-[#70685c] rounded text-[11px] cursor-pointer font-mono"
+                          title="Set weight to standard rare level (0.15)"
+                        >
+                          Rare (0.15)
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sliders Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {([
+                      { key: "temp", name: "Temperature", colorClass: "text-[#ff8a65]" },
+                      { key: "hum", name: "Humidity / Veg", colorClass: "text-[#4db6ac]" },
+                      { key: "cont", name: "Continentalness", colorClass: "text-[#9ccc65]" },
+                      { key: "eros", name: "Erosion", colorClass: "text-[#64b5f6]" },
+                      { key: "weird", name: "Weirdness", colorClass: "text-[#ba68c8]" },
+                      { key: "depth", name: "Depth", colorClass: "text-sky-400" },
+                    ] as const).map(dim => {
+                      const range = activePoint[dim.key];
+                      return (
+                        <div key={dim.key} className="bg-[#0d0909] border border-[#1f1313] p-3 rounded-lg font-mono">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className={`text-[11px] font-bold uppercase ${dim.colorClass}`}>{dim.name}</span>
+                            <span className="text-[10px] text-[#70685c]">
+                              [{range.min.toFixed(2)} to {range.max.toFixed(2)}]
+                            </span>
+                          </div>
+
+                          <div className="flex flex-col gap-2 text-xs">
+                            {/* Min bound */}
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-[10px] text-[#70685c] w-8">Min:</span>
+                              <PreciseNumberInput
+                                value={range.min}
+                                onChange={(val) => handlePointRangeChange(selectedBiomeId, selectedPointIndex, dim.key, "min", val)}
+                                className="w-14 bg-[#050303] border border-[#3e1b16] rounded px-1 py-0.5 text-white text-center text-[11px]"
+                              />
+                              <input
+                                type="range"
+                                min="-2.0"
+                                max="2.0"
+                                step="0.05"
+                                value={range.min}
+                                onChange={(e) => handlePointRangeChange(selectedBiomeId, selectedPointIndex, dim.key, "min", parseFloat(e.target.value))}
+                                className="flex-1 accent-[#ff7043] h-1 cursor-pointer"
+                              />
+                            </div>
+                            {/* Max bound */}
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-[10px] text-[#70685c] w-8">Max:</span>
+                              <PreciseNumberInput
+                                value={range.max}
+                                onChange={(val) => handlePointRangeChange(selectedBiomeId, selectedPointIndex, dim.key, "max", val)}
+                                className="w-14 bg-[#050303] border border-[#3e1b16] rounded px-1 py-0.5 text-white text-center text-[11px]"
+                              />
+                              <input
+                                type="range"
+                                min="-2.0"
+                                max="2.0"
+                                step="0.05"
+                                value={range.max}
+                                onChange={(e) => handlePointRangeChange(selectedBiomeId, selectedPointIndex, dim.key, "max", parseFloat(e.target.value))}
+                                className="flex-1 accent-[#ff7043] h-1 cursor-pointer"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <p className="text-[10px] text-[#70685c] italic leading-relaxed mt-1">
+                    <span>* Slide the climate ranges or adjust the generation weights to reshape your biomes. Updates will instantly refresh the 6D slice maps and 2D world visualizer. Use the "Restore Defaults" button in the biomes directory to reset a dimension's configurations anytime.</span>
+                  </p>
+
+                </div>
+              ) : null}
+            </div>
+          )}
 
           {/* NOISE ROUTER INPUTS PANEL */}
           <div className="bg-[#0c0808] border border-[#1c1212] rounded-xl p-4 sm:p-5 flex flex-col gap-4">
@@ -1272,155 +1524,6 @@ export default function App() {
               <span className="text-[#ff7043] font-bold">Supported format keywords:</span> any text block containing numbers matching <code className="text-white">T:</code>, <code className="text-white">H:</code>, <code className="text-white">C:</code>, <code className="text-white">E:</code>, <code className="text-white">W:</code>, <code className="text-white">D:</code> labels.
             </div>
           </div>
-
-          {/* BIOME CONFIGURATION PLACEMENT POINTS */}
-          {selectedBiome && (
-            <div className="bg-[#0c0808] border border-[#1c1212] rounded-xl p-4 sm:p-5 flex flex-col gap-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#1c1212] pb-3 gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: selectedBiome.color }} />
-                  <div>
-                    <h3 className="text-sm font-bold text-white">{selectedBiome.name} Placement Regions</h3>
-                    <p className="text-[11px] text-[#8c8779] font-mono">This biome generates in {selectedBiome.points.length} distinct multi-noise region{selectedBiome.points.length > 1 ? "s" : ""}</p>
-                  </div>
-                </div>
-
-                {selectedDimensionId === "custom_sandbox" && (
-                  <button
-                    onClick={handleAddPointToSelectedBiome}
-                    className="text-[10px] text-emerald-400 hover:bg-[#203a20] transition bg-[#142914] border border-[#235e23] px-2 py-1 rounded font-mono cursor-pointer"
-                  >
-                    + Add Region
-                  </button>
-                )}
-              </div>
-
-              {/* Point Tabs */}
-              <div className="flex flex-wrap gap-1.5 border-b border-[#1f1313] pb-2">
-                {selectedBiome.points.map((pt, idx) => {
-                  const vol = calculatePointVolume(pt);
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => setSelectedPointIndex(idx)}
-                      className={`px-3 py-1.5 text-xs font-mono rounded-lg border transition cursor-pointer flex items-center gap-1.5 ${
-                        selectedPointIndex === idx
-                          ? "bg-[#2c1512] text-white border-[#ff7043]"
-                          : "bg-[#0d0909] text-[#8c8779] border-transparent hover:border-[#3a2222]"
-                      }`}
-                    >
-                      Region #{idx + 1}
-                      <span className="text-[9px] bg-[#110c0c] px-1 py-0.5 rounded text-[#70685c]">
-                        Vol: {vol.toFixed(4)}
-                      </span>
-                      {selectedDimensionId === "custom_sandbox" && selectedBiome.points.length > 1 && (
-                        <span 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeletePointFromSelectedBiome(idx);
-                          }}
-                          className="text-red-400 hover:text-red-300 ml-1 font-bold text-[10px]"
-                        >
-                          ×
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {activePoint ? (
-                <div className="flex flex-col gap-4 mt-1">
-                  
-                  {selectedDimensionId === "custom_sandbox" && (
-                    <div className="bg-[#110c0c] border border-[#221313] rounded-lg p-3 flex flex-col gap-1.5">
-                      <span className="text-[10px] font-mono text-[#ff7043] font-bold uppercase tracking-wider block">Scale Active Region Space</span>
-                      <div className="grid grid-cols-3 gap-2">
-                        <button onClick={() => handleScaleAndBalance(1.35)} className="px-2.5 py-1.5 bg-[#ff7043]/10 hover:bg-[#ff7043]/20 border border-[#ff7043]/25 text-[#ff7043] rounded text-xs cursor-pointer font-mono font-semibold">+35% Scale</button>
-                        <button onClick={() => handleScaleAndBalance(1.75)} className="px-2.5 py-1.5 bg-[#ff7043]/20 hover:bg-[#ff7043]/30 border border-[#ff7043]/40 text-[#ff7043] rounded text-xs cursor-pointer font-mono font-semibold">+75% Scale</button>
-                        <button onClick={() => handleScaleAndBalance(0.5)} className="px-2.5 py-1.5 bg-[#1a0f0e] border border-[#3e1b17] hover:bg-[#2c1b18] text-white rounded text-xs cursor-pointer font-mono font-semibold">Halve (0.5x)</button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Sliders Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {([
-                      { key: "temp", name: "Temperature", colorClass: "text-[#ff8a65]" },
-                      { key: "hum", name: "Humidity / Veg", colorClass: "text-[#4db6ac]" },
-                      { key: "cont", name: "Continentalness", colorClass: "text-[#9ccc65]" },
-                      { key: "eros", name: "Erosion", colorClass: "text-[#64b5f6]" },
-                      { key: "weird", name: "Weirdness", colorClass: "text-[#ba68c8]" },
-                      { key: "depth", name: "Depth", colorClass: "text-sky-400" },
-                    ] as const).map(dim => {
-                      const range = activePoint[dim.key];
-                      const isEditable = selectedDimensionId === "custom_sandbox";
-                      return (
-                        <div key={dim.key} className="bg-[#0d0909] border border-[#1f1313] p-3 rounded-lg font-mono">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className={`text-[11px] font-bold uppercase ${dim.colorClass}`}>{dim.name}</span>
-                            <span className="text-[10px] text-[#70685c]">
-                              [{range.min.toFixed(2)} to {range.max.toFixed(2)}]
-                            </span>
-                          </div>
-
-                          <div className="flex flex-col gap-2 text-xs">
-                            {/* Min bound */}
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="text-[10px] text-[#70685c] w-8">Min:</span>
-                              <PreciseNumberInput
-                                value={range.min}
-                                onChange={(val) => handlePointRangeChange(selectedBiomeId, selectedPointIndex, dim.key, "min", val)}
-                                className={`w-14 bg-[#050303] border border-[#3e1b16] rounded px-1 py-0.5 text-white text-center text-[11px] ${!isEditable ? "opacity-50 pointer-events-none" : ""}`}
-                              />
-                              <input
-                                type="range"
-                                min="-2.0"
-                                max="2.0"
-                                step="0.05"
-                                value={range.min}
-                                disabled={!isEditable}
-                                onChange={(e) => handlePointRangeChange(selectedBiomeId, selectedPointIndex, dim.key, "min", parseFloat(e.target.value))}
-                                className={`flex-1 accent-[#ff7043] h-1 ${!isEditable ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
-                              />
-                            </div>
-                            {/* Max bound */}
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="text-[10px] text-[#70685c] w-8">Max:</span>
-                              <PreciseNumberInput
-                                value={range.max}
-                                onChange={(val) => handlePointRangeChange(selectedBiomeId, selectedPointIndex, dim.key, "max", val)}
-                                className={`w-14 bg-[#050303] border border-[#3e1b16] rounded px-1 py-0.5 text-white text-center text-[11px] ${!isEditable ? "opacity-50 pointer-events-none" : ""}`}
-                              />
-                              <input
-                                type="range"
-                                min="-2.0"
-                                max="2.0"
-                                step="0.05"
-                                value={range.max}
-                                disabled={!isEditable}
-                                onChange={(e) => handlePointRangeChange(selectedBiomeId, selectedPointIndex, dim.key, "max", parseFloat(e.target.value))}
-                                className={`flex-1 accent-[#ff7043] h-1 ${!isEditable ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <p className="text-[10px] text-[#70685c] italic leading-relaxed mt-1">
-                    {selectedDimensionId === "custom_sandbox" ? (
-                      <span>* You are editing the sandbox. Slide the values above or type precisely in the text inputs to reshape this custom biome region.</span>
-                    ) : (
-                      <span>* Vanilla biome definitions are read-only. Select the "Custom Sandbox" dimension in the top dropdown to create and fully modify your own biome multi-noise points.</span>
-                    )}
-                  </p>
-
-                </div>
-              ) : null}
-            </div>
-          )}
 
         </section>
 
