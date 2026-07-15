@@ -98,7 +98,7 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
             cont: { min: -0.6654, max: -0.1346 },
             eros: { min: -0.6654, max: -0.1346 },
             weird: { min: -0.8046, max: -0.4954 },
-            depth: { min: -1.0, max: 1.0 }
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -115,7 +115,7 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
             cont: { min: 0.5, max: 1.0 },
             eros: { min: -0.7, max: 0.3 },
             weird: { min: 0.2, max: 0.7 },
-            depth: { min: -1.0, max: 1.0 }
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -127,12 +127,12 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
         baseRarity: 1.0,
         points: [
           {
-            temp: { min: 0.0083, max: 0.7917 },
-            hum: { min: -0.8358, max: 0.5358 },
-            cont: { min: 0.7041, max: 1.0959 },
-            eros: { min: -0.5395, max: 0.4395 },
-            weird: { min: 0.778, max: 1.072 },
-            depth: { min: -1.0, max: 1.0 }
+            temp: { min: -0.5638, max: 1.3638 },
+            hum: { min: -1.8372, max: 1.5372 },
+            cont: { min: 0.4179, max: 1.3821 },
+            eros: { min: -1.2543, max: 1.1543 },
+            weird: { min: 0.5633, max: 1.2868 },
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -144,12 +144,12 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
         baseRarity: 1.0,
         points: [
           {
-            temp: { min: -0.2, max: 0.2 },
-            hum: { min: 0.6, max: 1.0 },
-            cont: { min: 0.0, max: 0.5 },
-            eros: { min: 0.8, max: 1.0 },
-            weird: { min: 0.4, max: 0.6 },
-            depth: { min: -1.0, max: 1.0 }
+            temp: { min: -0.486, max: 0.486 },
+            hum: { min: 0.314, max: 1.286 },
+            cont: { min: -0.3576, max: 0.8576 },
+            eros: { min: 0.63, max: 1.17 },
+            weird: { min: 0.23, max: 0.77 },
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -161,12 +161,12 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
         baseRarity: 1.0,
         points: [
           {
-            temp: { min: 0.7, max: 0.9 },
-            hum: { min: -1.0, max: -0.6 },
-            cont: { min: 0.3, max: 0.5 },
-            eros: { min: -0.1, max: 0.1 },
-            weird: { min: -0.3, max: -0.1 },
-            depth: { min: -1.0, max: 1.0 }
+            temp: { min: 0.5975, max: 1.0025 },
+            hum: { min: -1.1645, max: -0.4355 },
+            cont: { min: 0.1975, max: 0.6025 },
+            eros: { min: -0.2025, max: 0.2025 },
+            weird: { min: -0.4025, max: 0.0025 },
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -178,12 +178,12 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
         baseRarity: 1.0,
         points: [
           {
-            temp: { min: 0.0, max: 0.1 },
-            hum: { min: -0.1, max: 0.1 },
-            cont: { min: 0.85, max: 0.95 },
-            eros: { min: 0.6, max: 0.8 },
-            weird: { min: -0.6, max: -0.4 },
-            depth: { min: -1.0, max: 1.0 }
+            temp: { min: -0.15, max: 0.25 },
+            hum: { min: -0.4, max: 0.4 },
+            cont: { min: 0.7, max: 1.1 },
+            eros: { min: 0.3, max: 1.1 },
+            weird: { min: -0.9, max: -0.1 },
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       }
@@ -205,12 +205,12 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
         baseRarity: 1.0,
         points: [
           {
-            temp: { min: -0.4256, max: -0.0744 },
-            hum: { min: -0.4256, max: -0.0744 },
+            temp: { min: -0.3817, max: -0.1183 },
+            hum: { min: -0.3817, max: -0.1183 },
             cont: { min: -0.3513, max: 0.3513 },
-            eros: { min: 0.2445, max: 0.4555 },
-            weird: { min: 0.0445, max: 0.2555 },
-            depth: { min: -1.0, max: 1.0 }
+            eros: { min: 0.2709, max: 0.4291 },
+            weird: { min: 0.0709, max: 0.2291 },
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -222,12 +222,12 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
         baseRarity: 1.0,
         points: [
           {
-            temp: { min: -1.0, max: -0.5 },
-            hum: { min: -0.5, max: -0.1 },
-            cont: { min: -0.5, max: 0.5 },
-            eros: { min: 0.5, max: 1.0 },
-            weird: { min: -0.3, max: 0.0 },
-            depth: { min: -1.0, max: 1.0 }
+            temp: { min: -1.2284, max: -0.2716 },
+            hum: { min: -0.6827, max: 0.0828 },
+            cont: { min: -0.9568, max: 0.9568 },
+            eros: { min: 0.2716, max: 1.2284 },
+            weird: { min: -0.437, max: 0.137 },
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -239,12 +239,12 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
         baseRarity: 1.0,
         points: [
           {
-            temp: { min: 0.0, max: 0.5 },
-            hum: { min: 0.0, max: 0.5 },
-            cont: { min: -0.5, max: 0.5 },
-            eros: { min: -0.2, max: 0.2 },
-            weird: { min: 0.3, max: 0.6 },
-            depth: { min: -1.0, max: 1.0 }
+            temp: { min: 0.05, max: 0.45 },
+            hum: { min: 0.05, max: 0.45 },
+            cont: { min: -0.4, max: 0.4 },
+            eros: { min: -0.16, max: 0.16 },
+            weird: { min: 0.33, max: 0.57 },
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -256,12 +256,12 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
         baseRarity: 1.0,
         points: [
           {
-            temp: { min: 0.245, max: 1.255 },
-            hum: { min: 0.245, max: 1.255 },
-            cont: { min: 0.045, max: 1.055 },
-            eros: { min: -0.6038, max: 0.2038 },
-            weird: { min: 0.3962, max: 1.2038 },
-            depth: { min: -1.0, max: 1.0 }
+            temp: { min: 0.144, max: 1.356 },
+            hum: { min: 0.144, max: 1.356 },
+            cont: { min: -0.056, max: 1.156 },
+            eros: { min: -0.6846, max: 0.2847 },
+            weird: { min: 0.3154, max: 1.2847 },
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -273,12 +273,12 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
         baseRarity: 1.0,
         points: [
           {
-            temp: { min: -0.7, max: 0.3 },
-            hum: { min: -0.7, max: 0.3 },
-            cont: { min: -0.5, max: 0.5 },
-            eros: { min: 0.3, max: 0.7 },
-            weird: { min: 0.35, max: 0.67 },
-            depth: { min: -1.0, max: 1.0 }
+            temp: { min: -0.75, max: 0.35 },
+            hum: { min: -0.75, max: 0.35 },
+            cont: { min: -0.55, max: 0.55 },
+            eros: { min: 0.28, max: 0.72 },
+            weird: { min: 0.334, max: 0.686 },
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       }
@@ -305,7 +305,7 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
             cont: { min: 0.2, max: 1.0 },
             eros: { min: -1.0, max: -0.4 },
             weird: { min: -1.0, max: 1.0 },
-            depth: { min: -1.0, max: 1.0 }
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -317,12 +317,12 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
         baseRarity: 1.0,
         points: [
           {
-            temp: { min: -0.2, max: 0.2 },
-            hum: { min: -0.1, max: 0.3 },
-            cont: { min: 0.4, max: 0.8 },
-            eros: { min: 0.0, max: 0.3 },
-            weird: { min: 0.6, max: 1.0 },
-            depth: { min: -1.0, max: 1.0 }
+            temp: { min: -0.27, max: 0.27 },
+            hum: { min: -0.17, max: 0.37 },
+            cont: { min: 0.33, max: 0.87 },
+            eros: { min: -0.0525, max: 0.3525 },
+            weird: { min: 0.53, max: 1.07 },
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -334,12 +334,12 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
         baseRarity: 1.0,
         points: [
           {
-            temp: { min: -0.1, max: 0.1 },
-            hum: { min: -0.1, max: 0.8 },
-            cont: { min: 0.2, max: 1.0 },
-            eros: { min: -0.7, max: 0.0 },
-            weird: { min: 0.3, max: 0.7 },
-            depth: { min: -1.0, max: 1.0 }
+            temp: { min: -0.075, max: 0.075 },
+            hum: { min: 0.0125, max: 0.6875 },
+            cont: { min: 0.3, max: 0.9 },
+            eros: { min: -0.6125, max: -0.0875 },
+            weird: { min: 0.35, max: 0.65 },
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       }
