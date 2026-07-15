@@ -69,11 +69,11 @@ const DIMENSIONS: DimensionDefinition[] = [
         id: "uniform_grain",
         name: "Uniform Grain",
         color: "#d7ccc8",
-        temp: { min: -0.5, max: 0.5 },
-        hum: { min: -0.3, max: 0.5 },
-        cont: { min: -1.0, max: 0.2 },
-        eros: { min: -1.0, max: 0.2 },
-        weird: { min: -1.0, max: -0.3 },
+        temp: { min: -0.221, max: 0.221 },
+        hum: { min: -0.0769, max: 0.2769 },
+        cont: { min: -0.6654, max: -0.1346 },
+        eros: { min: -0.6654, max: -0.1346 },
+        weird: { min: -0.8046, max: -0.4954 },
         description: "The primary base biome. Vast flat grains of wood and standard woodbound structures."
       },
       {
@@ -143,11 +143,11 @@ const DIMENSIONS: DimensionDefinition[] = [
         id: "weald_outskirts",
         name: "Weald Outskirts",
         color: "#8d6e63",
-        temp: { min: -0.5, max: 0.0 },
-        hum: { min: -0.5, max: 0.0 },
-        cont: { min: -0.5, max: 0.5 },
-        eros: { min: 0.2, max: 0.5 },
-        weird: { min: 0.0, max: 0.3 },
+        temp: { min: -0.4256, max: -0.0744 },
+        hum: { min: -0.4256, max: -0.0744 },
+        cont: { min: -0.3513, max: 0.3513 },
+        eros: { min: 0.2445, max: 0.4555 },
+        weird: { min: 0.0445, max: 0.2555 },
         description: "The transition zone into the petrified weald, featuring scattered calcified trees."
       },
       {
