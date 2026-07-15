@@ -253,6 +253,41 @@ const calculatePointDistance = (
   return Math.sqrt(dT*dT + dH*dH + dC*dC + dE*dE + dW*dW + dD*dD);
 };
 
+// Helper to calculate 6D clamped distance (Accurate) to a specific biome placement point
+const calculateClampedDistance = (
+  t: number, h: number, c: number, e: number, w: number, d: number,
+  pt: ClimatePoint
+) => {
+  const dT = t < pt.temp.min ? pt.temp.min - t : (t > pt.temp.max ? t - pt.temp.max : 0);
+  const dH = h < pt.hum.min ? pt.hum.min - h : (h > pt.hum.max ? h - pt.hum.max : 0);
+  const dC = c < pt.cont.min ? pt.cont.min - c : (c > pt.cont.max ? c - pt.cont.max : 0);
+  const dE = e < pt.eros.min ? pt.eros.min - e : (e > pt.eros.max ? e - pt.eros.max : 0);
+  const dW = w < pt.weird.min ? pt.weird.min - w : (w > pt.weird.max ? w - pt.weird.max : 0);
+  const dD = d < pt.depth.min ? pt.depth.min - d : (d > pt.depth.max ? d - pt.depth.max : 0);
+
+  let dist = Math.sqrt(dT*dT + dH*dH + dC*dC + dE*dE + dW*dW + dD*dD);
+  if (dist === 0) {
+    // If inside bounds, use midpoint distance scaled down by 0.001 as a tie-breaker
+    const midT = (pt.temp.min + pt.temp.max) / 2;
+    const midH = (pt.hum.min + pt.hum.max) / 2;
+    const midC = (pt.cont.min + pt.cont.max) / 2;
+    const midE = (pt.eros.min + pt.eros.max) / 2;
+    const midW = (pt.weird.min + pt.weird.max) / 2;
+    const midD = (pt.depth.min + pt.depth.max) / 2;
+
+    const midDT = t - midT;
+    const midDH = h - midH;
+    const midDC = c - midC;
+    const midDE = e - midE;
+    const midDW = w - midW;
+    const midDD = d - midD;
+
+    const midDist = Math.sqrt(midDT*midDT + midDH*midDH + midDC*midDC + midDE*midDE + midDW*midDW + midDD*midDD);
+    dist = midDist * 0.001;
+  }
+  return dist;
+};
+
 // Helper to calculate hypervolume of a 6D point box
 const calculatePointVolume = (pt: ClimatePoint) => {
   const dT = Math.max(0.01, pt.temp.max - pt.temp.min);
@@ -364,6 +399,9 @@ export default function App() {
   useEffect(() => {
     setSelectedPointIndex(0);
   }, [selectedBiomeId]);
+
+  // Selected distance matching algorithm: Clamped Distance (Accurate) vs Midpoint Distance (Experimental)
+  const [matchingAlgorithm, setMatchingAlgorithm] = useState<"clamped" | "midpoint">("clamped");
 
   // Seed settings for 2D Map simulation
   const [seedInput, setSeedInput] = useState<string>("42");
@@ -533,6 +571,49 @@ export default function App() {
       });
       setSelectedPointIndex(0);
     }
+  };
+
+  const handleApplyPreset = (type: "moderate" | "frequent" | "restored") => {
+    if (type === "restored") {
+      handleResetBiomeToDefault(selectedBiomeId);
+      return;
+    }
+
+    setDimensionBiomes(prev => {
+      const current = prev[selectedDimensionId] || [];
+      const updated = current.map(b => {
+        if (b.id !== selectedBiomeId) return b;
+        
+        const expandDim = (range: { min: number; max: number }, percent: number, minWidth: number) => {
+          const center = (range.min + range.max) / 2;
+          const halfWidth = (range.max - range.min) / 2;
+          const newHalfWidth = Math.max(minWidth, halfWidth * percent);
+          return {
+            min: parseFloat(Math.max(-2.0, Math.min(2.0, center - newHalfWidth)).toFixed(4)),
+            max: parseFloat(Math.max(-2.0, Math.min(2.0, center + newHalfWidth)).toFixed(4))
+          };
+        };
+
+        const percent = type === "moderate" ? 1.35 : 1.75;
+        const minWidth = type === "moderate" ? 0.15 : 0.3;
+
+        return {
+          ...b,
+          points: b.points.map((p, pIdx) => {
+            if (pIdx !== selectedPointIndex) return p;
+            return {
+              temp: expandDim(p.temp, percent, minWidth),
+              hum: expandDim(p.hum, percent, minWidth),
+              cont: expandDim(p.cont, percent, minWidth),
+              eros: expandDim(p.eros, percent, minWidth),
+              weird: expandDim(p.weird, percent, minWidth),
+              depth: expandDim(p.depth, percent, minWidth)
+            };
+          })
+        };
+      });
+      return { ...prev, [selectedDimensionId]: updated };
+    });
   };
 
   const handleApplyClimateTemplate = (templateValues: {
@@ -759,12 +840,16 @@ export default function App() {
       let matchedPointIdx = 0;
 
       biome.points.forEach((pt, idx) => {
-        const rawDist = calculatePointDistance(
-          routerTemp, routerHum, routerCont, routerEros, routerWeird, routerDepth,
-          pt
-        );
-        // Apply baseRarity as a divisor to scale down distance for high-weight biomes (making them match easier)
-        const dist = rawDist / (biome.baseRarity || 1.0);
+        const dist = matchingAlgorithm === "clamped"
+          ? calculateClampedDistance(
+              routerTemp, routerHum, routerCont, routerEros, routerWeird, routerDepth,
+              pt
+            )
+          : calculatePointDistance(
+              routerTemp, routerHum, routerCont, routerEros, routerWeird, routerDepth,
+              pt
+            );
+
         if (dist < minDistance) {
           minDistance = dist;
           matchedPointIdx = idx;
@@ -788,7 +873,7 @@ export default function App() {
       best: sorted[0] || null,
       topMatches: sorted.slice(0, 10)
     };
-  }, [biomes, routerTemp, routerHum, routerCont, routerEros, routerWeird, routerDepth]);
+  }, [biomes, routerTemp, routerHum, routerCont, routerEros, routerWeird, routerDepth, matchingAlgorithm]);
 
   // Selected biome structure
   const selectedBiome = useMemo(() => {
@@ -862,8 +947,9 @@ export default function App() {
 
     for (const b of biomes) {
       for (const pt of b.points) {
-        const rawDist = calculatePointDistance(t, h, c, e, w, d, pt);
-        const dist = rawDist / (b.baseRarity || 1.0);
+        const dist = matchingAlgorithm === "clamped"
+          ? calculateClampedDistance(t, h, c, e, w, d, pt)
+          : calculatePointDistance(t, h, c, e, w, d, pt);
         if (dist < minDistance) {
           minDistance = dist;
           bestBiome = b;
@@ -880,8 +966,9 @@ export default function App() {
         let matchedOcean = bestBiome;
         for (const b of oceanBiomes) {
           for (const pt of b.points) {
-            const rawDist = calculatePointDistance(t, h, c, e, w, d, pt);
-            const dist = rawDist / (b.baseRarity || 1.0);
+            const dist = matchingAlgorithm === "clamped"
+              ? calculateClampedDistance(t, h, c, e, w, d, pt)
+              : calculatePointDistance(t, h, c, e, w, d, pt);
             if (dist < minOceanDist) {
               minOceanDist = dist;
               matchedOcean = b;
@@ -899,7 +986,7 @@ export default function App() {
     }
 
     return bestBiome;
-  }, [biomes, showOceans, showRivers, selectedDimensionId]);
+  }, [biomes, showOceans, showRivers, selectedDimensionId, matchingAlgorithm]);
 
   // Main canvas rendering
   useEffect(() => {
@@ -1039,8 +1126,9 @@ export default function App() {
         let minDistance = Infinity;
         if (matched) {
           matched.points.forEach(pt => {
-            const rawDist = calculatePointDistance(t, h, c, eros, w, d, pt);
-            const dist = rawDist / (matched.baseRarity || 1.0);
+            const dist = matchingAlgorithm === "clamped"
+              ? calculateClampedDistance(t, h, c, eros, w, d, pt)
+              : calculatePointDistance(t, h, c, eros, w, d, pt);
             if (dist < minDistance) minDistance = dist;
           });
         }
@@ -1090,8 +1178,9 @@ export default function App() {
         let minDistance = Infinity;
         if (matched) {
           matched.points.forEach(pt => {
-            const rawDist = calculatePointDistance(t, h, c, eVal, w, d, pt);
-            const dist = rawDist / (matched.baseRarity || 1.0);
+            const dist = matchingAlgorithm === "clamped"
+              ? calculateClampedDistance(t, h, c, eVal, w, d, pt)
+              : calculatePointDistance(t, h, c, eVal, w, d, pt);
             if (dist < minDistance) minDistance = dist;
           });
         }
@@ -1362,6 +1451,40 @@ export default function App() {
 
               {activePoint ? (
                 <div className="flex flex-col gap-4 mt-1">
+                  
+                  {/* Climate Range Presets (Moderate / Frequent / Default) */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-[#110c0c] border border-[#221313] p-3 rounded-xl gap-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-[#ff7043] animate-pulse shrink-0" />
+                      <div>
+                        <span className="text-[10px] font-mono text-[#ff7043] font-bold uppercase tracking-wider block">Climate Range Presets</span>
+                        <p className="text-[11px] text-[#8c8779] font-mono leading-none">Scale the dimensions of the active region</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5 self-end sm:self-auto">
+                      <button 
+                        onClick={() => handleApplyPreset("moderate")}
+                        className="px-2.5 py-1 rounded bg-[#ff7043] hover:bg-[#ff8a65] text-[#080808] font-bold text-[10px] font-mono transition cursor-pointer"
+                        title="Expands ranges of this region around its coordinate center to boost generation chance."
+                      >
+                        Moderate
+                      </button>
+                      <button 
+                        onClick={() => handleApplyPreset("frequent")}
+                        className="px-2.5 py-1 rounded bg-[#d84315] hover:bg-[#ff7043] text-white font-bold text-[10px] font-mono transition cursor-pointer"
+                        title="Significantly broadens range boundaries of this region to make it common."
+                      >
+                        Frequent
+                      </button>
+                      <button 
+                        onClick={() => handleApplyPreset("restored")}
+                        className="px-2.5 py-1 rounded bg-[#201414] border border-[#ff7043]/15 text-[#8c8779] hover:text-white text-[10px] font-mono transition cursor-pointer"
+                        title="Restores this biome to original mod repository settings."
+                      >
+                        Default
+                      </button>
+                    </div>
+                  </div>
                   
                   <div className="flex flex-col gap-3">
                     <div className="bg-[#110c0c] border border-[#221313] rounded-lg p-3 flex flex-col gap-2">
@@ -1712,6 +1835,47 @@ export default function App() {
                   Random
                 </button>
               </div>
+            </div>
+
+            {/* ALGORITHM TOGGLE BLOCK */}
+            <div className="bg-[#110c0c] border border-[#221313] p-3 rounded-lg text-xs flex flex-col gap-2">
+              <div className="flex items-center justify-between font-mono">
+                <label className="text-[10px] text-[#ff7043] font-bold uppercase tracking-wider block">
+                  Biome Matching Algorithm
+                </label>
+                <div className="group relative">
+                  <span className="text-[10px] text-[#4db6ac] border border-[#4db6ac]/30 hover:border-[#4db6ac] rounded px-1.5 py-0.5 bg-[#4db6ac]/5 cursor-help transition select-none">
+                    ℹ️ Help Note
+                  </span>
+                  <div className="absolute right-0 bottom-full mb-2 w-64 p-2.5 bg-[#0a0606] border border-[#235e5e]/80 text-[#a4a090] text-[10px] rounded shadow-xl leading-relaxed hidden group-hover:block z-50">
+                    <strong className="text-white">Clamped Distance (Accurate)</strong> matches how Minecraft's actual nearest-point biome resolution behaves, measuring only out-of-range boundaries. <strong className="text-white">Midpoint Distance (Experimental)</strong> is a simplified Euclidean approximation to midpoints, kept for comparison.
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex bg-[#050303] p-0.5 rounded border border-[#221313] text-xs font-mono">
+                <button
+                  type="button"
+                  onClick={() => setMatchingAlgorithm("clamped")}
+                  className={`flex-1 px-2.5 py-1.5 text-center text-[10px] sm:text-xs rounded font-bold transition cursor-pointer ${matchingAlgorithm === "clamped" ? "bg-[#ff7043] text-[#080808]" : "text-[#8c8779] hover:text-white"}`}
+                  title="Accurate multi-axis range-clamped coordinate matching (with midpoint distance tie-breaker)"
+                >
+                  Clamped Distance (Accurate)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMatchingAlgorithm("midpoint")}
+                  className={`flex-1 px-2.5 py-1.5 text-center text-[10px] sm:text-xs rounded font-bold transition cursor-pointer ${matchingAlgorithm === "midpoint" ? "bg-[#ff7043] text-[#080808]" : "text-[#8c8779] hover:text-white"}`}
+                  title="Straight-line distance approximation to range midpoint targets"
+                >
+                  Midpoint Distance (Experimental)
+                </button>
+              </div>
+              <p className="text-[9px] text-[#70685c] leading-relaxed font-mono">
+                {matchingAlgorithm === "clamped" 
+                  ? "✓ Clamped: Axis distance is 0 inside bounds. Ties are resolved via scaled midpoint distance (×0.001)." 
+                  : "⚠ Midpoint: Standard straight-line distance to range centers, decoupled from baseRarity."}
+              </p>
             </div>
 
             {mapMode === "slice" ? (
