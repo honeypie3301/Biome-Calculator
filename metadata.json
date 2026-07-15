@@ -1,6 +1,6 @@
 {
   "name": "Backwoods Biome Rarity Calculator",
-  "description": "A precise 5D noise-space calculator for Backwoods mod biome rarities, expanded with a professional, automated tool to decompile and port the Viltrumite Core and Viltrumite Flight Fabric 1.20.1 mods to NeoForge 1.21.1.",
+  "description": "A highly accurate 6D multi-noise climate calculator and visualizer for Minecraft Java Edition 1.21.1 (Overworld & Nether) supporting climate distance matching, F3 debug pasting, and precise biome rarity calculations.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -1,32 +1,20 @@
-# Biome Rarity Calculator
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+</div>
 
-The Biome Rarity Calculator is a multi-dimensional visualization and simulation tool designed to model, test, and analyze procedural multi-noise biome generation environments.
+# Run and deploy your AI Studio app
 
-## Features
+This contains everything you need to run your app locally.
 
-- **Multi-Noise 5D Climate Modeling**: Models Temperature, Humidity, Continentalness, Erosion, and Weirdness parameters to map biome distributions.
-- **Interactive Map Projections**: Renders 2D slice projections of climate parameters, block-based coordinate grids, and Chunkbase-style world map simulations.
-- **Minecraft Seed Hashing emulation**: Supports inputting numeric seeds or custom text seed strings using exact Java/Minecraft 32-bit and 64-bit hashing standards.
-- **Custom Sandbox Mode**: Allows users to add, customize, persist, and delete custom biomes with fully adjustable climate target ranges.
+View your app in AI Studio: https://ai.studio/apps/f23a1774-236d-4f72-8f0a-769f7f0227cd
 
-## Quick Start
+## Run Locally
 
-### Prerequisites
-- Node.js (v20 or v22)
+**Prerequisites:**  Node.js
 
-### Running the App Locally
 
 1. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-2. Start the development server:
-   ```bash
-   npm run dev
-   ```
-
-3. Build the application for production:
-   ```bash
-   npm run build
-   ```
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`
