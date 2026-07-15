@@ -264,18 +264,25 @@ const calculatePointVolume = (pt: ClimatePoint) => {
   return dT * dH * dC * dE * dW * dD;
 };
 
+// Helper to find the original default base rarity of a biome across all dimensions & sandboxes
+const getOriginalBaseRarity = (biomeId: string): number => {
+  for (const d of BACKWOODS_DIMENSIONS) {
+    const found = d.biomes.find(b => b.id === biomeId);
+    if (found) return found.baseRarity;
+  }
+  for (const d of VANILLA_DIMENSIONS) {
+    const found = d.biomes.find(b => b.id === biomeId);
+    if (found) return found.baseRarity;
+  }
+  const foundSandbox = DEFAULT_SANDBOX_BIOMES.find(b => b.id === biomeId);
+  if (foundSandbox) return foundSandbox.baseRarity;
+  return 1.0;
+};
+
 export default function App() {
   // Dimension state: custom Backwoods dimensions, Vanilla, or custom_sandbox
   const [selectedDimensionId, setSelectedDimensionId] = useState<string>("the_grain");
   const [dimensionBiomes, setDimensionBiomes] = useState<{ [dimId: string]: Biome[] }>(() => {
-    const saved = localStorage.getItem("all_dimension_biomes_v1");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        // Fallback
-      }
-    }
     const initial: { [dimId: string]: Biome[] } = {};
     for (const d of BACKWOODS_DIMENSIONS) {
       initial[d.id] = d.biomes;
@@ -283,18 +290,51 @@ export default function App() {
     for (const d of VANILLA_DIMENSIONS) {
       initial[d.id] = d.biomes;
     }
-    initial["custom_sandbox"] = DEFAULT_SANDBOX_BIOMES;
+    
+    // Only load the custom sandbox from local storage
+    const savedSandbox = localStorage.getItem("sandbox_biomes_v3");
+    if (savedSandbox) {
+      try {
+        initial["custom_sandbox"] = JSON.parse(savedSandbox);
+      } catch (e) {
+        initial["custom_sandbox"] = DEFAULT_SANDBOX_BIOMES;
+      }
+    } else {
+      initial["custom_sandbox"] = DEFAULT_SANDBOX_BIOMES;
+    }
     return initial;
   });
 
-  // LocalStorage persistence for all dimension biomes
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [weightInputVal, setWeightInputVal] = useState<string>("");
+
+  // LocalStorage persistence for ONLY custom sandbox biomes
   useEffect(() => {
-    localStorage.setItem("all_dimension_biomes_v1", JSON.stringify(dimensionBiomes));
-  }, [dimensionBiomes]);
+    if (dimensionBiomes["custom_sandbox"]) {
+      localStorage.setItem("sandbox_biomes_v3", JSON.stringify(dimensionBiomes["custom_sandbox"]));
+    }
+  }, [dimensionBiomes["custom_sandbox"]]);
 
   const biomes = useMemo(() => {
     return dimensionBiomes[selectedDimensionId] || [];
   }, [dimensionBiomes, selectedDimensionId]);
+
+  const selectedDimension = useMemo(() => {
+    const d = BACKWOODS_DIMENSIONS.find(x => x.id === selectedDimensionId) || 
+              VANILLA_DIMENSIONS.find(x => x.id === selectedDimensionId);
+    if (d) return d;
+    if (selectedDimensionId === "custom_sandbox") {
+      return {
+        id: "custom_sandbox",
+        name: "Custom Sandbox",
+        description: "Your own custom testing dimension containing your authored biomes.",
+        seaLevel: 63,
+        defaultBlock: "stone",
+        defaultFixed: { temp: 0.0, hum: 0.0, cont: 0.0, eros: 0.0, weird: 0.0, depth: 0.0 }
+      };
+    }
+    return null;
+  }, [selectedDimensionId]);
 
   // Selected biome for manual point details / sliders
   const [selectedBiomeId, setSelectedBiomeId] = useState<string>("splinter_nest");
@@ -310,35 +350,13 @@ export default function App() {
     }
   }, [biomes, selectedBiomeId]);
 
-  // Noise Router Inputs (Editable, decimal, negative, live update)
-  const [routerTemp, setRouterTemp] = useState<number>(0.0);
-  const [routerHum, setRouterHum] = useState<number>(0.0);
-  const [routerCont, setRouterCont] = useState<number>(0.0);
-  const [routerEros, setRouterEros] = useState<number>(0.0);
-  const [routerWeird, setRouterWeird] = useState<number>(0.0);
-  const [routerDepth, setRouterDepth] = useState<number>(0.0);
-
-  // Initialize Noise Router inputs on dimension change
-  useEffect(() => {
-    if (selectedDimensionId !== "custom_sandbox") {
-      const dim = BACKWOODS_DIMENSIONS.find(d => d.id === selectedDimensionId) || 
-                  VANILLA_DIMENSIONS.find(d => d.id === selectedDimensionId) || 
-                  BACKWOODS_DIMENSIONS[0];
-      setRouterTemp(dim.defaultFixed.temp);
-      setRouterHum(dim.defaultFixed.hum);
-      setRouterCont(dim.defaultFixed.cont);
-      setRouterEros(dim.defaultFixed.eros);
-      setRouterWeird(dim.defaultFixed.weird);
-      setRouterDepth(dim.defaultFixed.depth);
-    } else {
-      setRouterTemp(0.0);
-      setRouterHum(0.0);
-      setRouterCont(0.0);
-      setRouterEros(0.0);
-      setRouterWeird(0.0);
-      setRouterDepth(0.0);
-    }
-  }, [selectedDimensionId]);
+  // Noise Router Inputs replaced with static constants as the interactive panel was removed
+  const routerTemp = 0.0;
+  const routerHum = 0.0;
+  const routerCont = 0.0;
+  const routerEros = 0.0;
+  const routerWeird = 0.0;
+  const routerDepth = 0.0;
 
   // Selected Point Index for details slider panel
   const [selectedPointIndex, setSelectedPointIndex] = useState<number>(0);
@@ -392,85 +410,7 @@ export default function App() {
     };
   }, [simulationSeed]);
 
-  // F3 Diagnostics Input & Parsing
-  const [f3InputText, setF3InputText] = useState<string>("");
-  const [f3ParseError, setF3ParseError] = useState<string | null>(null);
-  const [f3SuccessMessage, setF3SuccessMessage] = useState<string | null>(null);
-
-  const handleParseF3Diagnostics = () => {
-    setF3ParseError(null);
-    setF3SuccessMessage(null);
-    if (!f3InputText.trim()) {
-      setF3ParseError("Paste F3 output first.");
-      return;
-    }
-
-    // Clean up brackets, commas, semicolons for robust parsing
-    const cleaned = f3InputText.replace(/[\[\]{},;()]/g, " ");
-    const pairs: { [key: string]: number } = {};
-
-    // 1. Matches patterns like "Key: Value" or "Key = Value"
-    const regex = /([a-zA-Z_]+)\s*[:=]\s*(-?\d+(?:\.\d+)?)/g;
-    let match;
-    while ((match = regex.exec(cleaned)) !== null) {
-      const key = match[1].toUpperCase();
-      const val = parseFloat(match[2]);
-      if (!isNaN(val)) {
-        pairs[key] = val;
-      }
-    }
-
-    // 2. Fallback for single characters or words directly followed by value, e.g. "T-0.251" or "T: -0.251"
-    const packedRegex = /(?:^|\s)([a-zA-Z_]+)\s*[:=]?\s*(-?\d+(?:\.\d+)?)/g;
-    while ((match = packedRegex.exec(cleaned)) !== null) {
-      const key = match[1].toUpperCase();
-      const val = parseFloat(match[2]);
-      if (!isNaN(val) && pairs[key] === undefined) {
-        pairs[key] = val;
-      }
-    }
-
-    const getVal = (shortKey: string, longKeys: string[]) => {
-      if (pairs[shortKey] !== undefined) return pairs[shortKey];
-      for (const lk of longKeys) {
-        if (pairs[lk.toUpperCase()] !== undefined) return pairs[lk.toUpperCase()];
-      }
-      return null;
-    };
-
-    const t = getVal("T", ["TEMP", "TEMPERATURE", "T_VAL"]);
-    const h = getVal("H", ["HUM", "HUMIDITY", "VEG", "VEGETATION", "H_VAL", "H_val"]);
-    const c = getVal("C", ["CONT", "CONTINENTALNESS", "C_VAL", "C_val"]);
-    const e = getVal("E", ["EROS", "EROSION", "E_VAL", "E_val"]);
-    const w = getVal("W", ["WEIRD", "WEIRDNESS", "W_VAL", "W_val"]);
-    const d = getVal("D", ["DEPTH", "D_VAL", "D_val", "OFFSET"]);
-
-    let count = 0;
-    if (t !== null) { setRouterTemp(t); count++; }
-    if (h !== null) { setRouterHum(h); count++; }
-    if (c !== null) { setRouterCont(c); count++; }
-    if (e !== null) { setRouterEros(e); count++; }
-    if (w !== null) { setRouterWeird(w); count++; }
-    if (d !== null) { setRouterDepth(d); count++; }
-
-    if (count > 0) {
-      const parsedValues = [];
-      if (t !== null) parsedValues.push(`Temp: ${t}`);
-      if (h !== null) parsedValues.push(`Hum: ${h}`);
-      if (c !== null) parsedValues.push(`Cont: ${c}`);
-      if (e !== null) parsedValues.push(`Eros: ${e}`);
-      if (w !== null) parsedValues.push(`Weird: ${w}`);
-      if (d !== null) parsedValues.push(`Depth: ${d}`);
-      
-      setF3InputText("");
-      setF3SuccessMessage(`Successfully updated: ${parsedValues.join(", ")}`);
-      setTimeout(() => {
-        setF3SuccessMessage(null);
-      }, 5000);
-    } else {
-      setF3ParseError("Could not recognize any valid T:, H:, C:, E:, W:, or D: formats. Example: T: -0.25 H: -0.30");
-    }
-  };
+  // F3 Diagnostics Input & Parsing removed
 
   const handleUpdateCustomBiomeColor = (biomeId: string, color: string) => {
     setDimensionBiomes(prev => {
@@ -488,10 +428,140 @@ export default function App() {
     });
   };
 
-  const handleUpdateCustomBiomeBaseRarity = (biomeId: string, baseRarity: number) => {
+  const handleUpdateCustomBiomeBaseRarity = (biomeId: string, baseRarity: number, changeType?: "common" | "rare" | "multiply", multiplierFactor?: number) => {
     setDimensionBiomes(prev => {
       const current = prev[selectedDimensionId] || [];
-      const updated = current.map(b => b.id === biomeId ? { ...b, baseRarity: parseFloat(Math.max(0.0001, Math.min(100.0, baseRarity)).toFixed(4)) } : b);
+      const updated = current.map(b => {
+        if (b.id !== biomeId) return b;
+        
+        // Update points if we are editing sliders
+        const updatedPoints = b.points.map((p, pIdx) => {
+          if (pIdx !== selectedPointIndex) return p;
+          
+          if (changeType === "common") {
+            // Reset to standard common wide ranges
+            return {
+              temp: { min: -0.3, max: 0.3 },
+              hum: { min: -0.3, max: 0.3 },
+              cont: { min: -0.3, max: 0.3 },
+              eros: { min: -0.3, max: 0.3 },
+              weird: { min: -0.3, max: 0.3 },
+              depth: { min: -1.0, max: 1.0 }
+            };
+          } else if (changeType === "rare") {
+            // Tighten to rare narrow ranges
+            return {
+              temp: { min: -0.1, max: 0.1 },
+              hum: { min: -0.1, max: 0.1 },
+              cont: { min: 0.4, max: 0.6 },
+              eros: { min: 0.3, max: 0.5 },
+              weird: { min: 0.2, max: 0.4 },
+              depth: { min: -0.5, max: 0.5 }
+            };
+          } else if (changeType === "multiply" && multiplierFactor !== undefined) {
+            // Scale the ranges based on multiplier factor
+            const scaleRange = (range: { min: number, max: number }, factor: number) => {
+              const mid = (range.min + range.max) / 2;
+              const halfWidth = (range.max - range.min) / 2;
+              // Wider if factor > 1 (making it more common/weighty), narrower if factor < 1 (making it more rare)
+              const newHalfWidth = Math.max(0.01, halfWidth * factor);
+              return {
+                min: parseFloat(Math.max(-2.0, Math.min(2.0, mid - newHalfWidth)).toFixed(4)),
+                max: parseFloat(Math.max(-2.0, Math.min(2.0, mid + newHalfWidth)).toFixed(4))
+              };
+            };
+            return {
+              temp: scaleRange(p.temp, multiplierFactor),
+              hum: scaleRange(p.hum, multiplierFactor),
+              cont: scaleRange(p.cont, multiplierFactor),
+              eros: scaleRange(p.eros, multiplierFactor),
+              weird: scaleRange(p.weird, multiplierFactor),
+              depth: scaleRange(p.depth, multiplierFactor)
+            };
+          }
+          return p;
+        });
+
+        return {
+          ...b,
+          baseRarity: parseFloat(Math.max(0.0001, Math.min(100.0, baseRarity)).toFixed(4)),
+          points: updatedPoints
+        };
+      });
+      return { ...prev, [selectedDimensionId]: updated };
+    });
+  };
+
+  const handleCommitWeight = (biome: Biome, valStr: string) => {
+    const parsed = parseFloat(valStr);
+    if (!isNaN(parsed) && parsed > 0) {
+      const newWeight = Math.max(0.0001, Math.min(100.0, parsed));
+      const currentWeight = biome.baseRarity;
+      if (Math.abs(newWeight - currentWeight) > 0.00001) {
+        // Calculate multiplier factor based on weight ratio change
+        const factor = newWeight / currentWeight;
+        handleUpdateCustomBiomeBaseRarity(biome.id, newWeight, "multiply", factor);
+      }
+    } else {
+      // Revert to current biome's weight if invalid input
+      setWeightInputVal(biome.baseRarity.toString());
+    }
+  };
+
+  const handleResetBiomeToDefault = (biomeId: string) => {
+    let originalBiome: Biome | undefined;
+    for (const d of BACKWOODS_DIMENSIONS) {
+      const found = d.biomes.find(b => b.id === biomeId);
+      if (found) { originalBiome = found; break; }
+    }
+    if (!originalBiome) {
+      for (const d of VANILLA_DIMENSIONS) {
+        const found = d.biomes.find(b => b.id === biomeId);
+        if (found) { originalBiome = found; break; }
+      }
+    }
+    if (!originalBiome) {
+      originalBiome = DEFAULT_SANDBOX_BIOMES.find(b => b.id === biomeId);
+    }
+
+    if (originalBiome) {
+      const orig = originalBiome;
+      setDimensionBiomes(prev => {
+        const current = prev[selectedDimensionId] || [];
+        const updated = current.map(b => b.id === biomeId ? { ...b, baseRarity: orig.baseRarity, points: JSON.parse(JSON.stringify(orig.points)) } : b);
+        return { ...prev, [selectedDimensionId]: updated };
+      });
+      setSelectedPointIndex(0);
+    }
+  };
+
+  const handleApplyClimateTemplate = (templateValues: {
+    temp: { min: number; max: number };
+    hum: { min: number; max: number };
+    cont: { min: number; max: number };
+    eros: { min: number; max: number };
+    weird: { min: number; max: number };
+    depth: { min: number; max: number };
+  }) => {
+    setDimensionBiomes(prev => {
+      const current = prev[selectedDimensionId] || [];
+      const updated = current.map(b => {
+        if (b.id !== selectedBiomeId) return b;
+        return {
+          ...b,
+          points: b.points.map((p, pIdx) => {
+            if (pIdx !== selectedPointIndex) return p;
+            return {
+              temp: { min: parseFloat(templateValues.temp.min.toFixed(4)), max: parseFloat(templateValues.temp.max.toFixed(4)) },
+              hum: { min: parseFloat(templateValues.hum.min.toFixed(4)), max: parseFloat(templateValues.hum.max.toFixed(4)) },
+              cont: { min: parseFloat(templateValues.cont.min.toFixed(4)), max: parseFloat(templateValues.cont.max.toFixed(4)) },
+              eros: { min: parseFloat(templateValues.eros.min.toFixed(4)), max: parseFloat(templateValues.eros.max.toFixed(4)) },
+              weird: { min: parseFloat(templateValues.weird.min.toFixed(4)), max: parseFloat(templateValues.weird.max.toFixed(4)) },
+              depth: { min: parseFloat(templateValues.depth.min.toFixed(4)), max: parseFloat(templateValues.depth.max.toFixed(4)) }
+            };
+          })
+        };
+      });
       return { ...prev, [selectedDimensionId]: updated };
     });
   };
@@ -606,39 +676,6 @@ export default function App() {
                 ...p[dim],
                 [bound]: parseFloat(val.toFixed(4))
               }
-            };
-          })
-        };
-      });
-      return { ...prev, [selectedDimensionId]: updated };
-    });
-  };
-
-  // Helper slider/scale to multiply point size
-  const handleScaleAndBalance = (factor: number) => {
-    setDimensionBiomes(prev => {
-      const current = prev[selectedDimensionId] || [];
-      const updated = current.map(b => {
-        if (b.id !== selectedBiomeId) return b;
-        return {
-          ...b,
-          points: b.points.map((p, pIdx) => {
-            if (pIdx !== selectedPointIndex) return p;
-            const scaleDim = (range: ClimateRange) => {
-              const center = (range.min + range.max) / 2;
-              const radius = (range.max - range.min) / 2 * factor;
-              return {
-                min: parseFloat(Math.max(-5.0, center - radius).toFixed(4)),
-                max: parseFloat(Math.min(5.0, center + radius).toFixed(4))
-              };
-            };
-            return {
-              temp: scaleDim(p.temp),
-              hum: scaleDim(p.hum),
-              cont: scaleDim(p.cont),
-              eros: scaleDim(p.eros),
-              weird: scaleDim(p.weird),
-              depth: scaleDim(p.depth)
             };
           })
         };
@@ -763,6 +800,13 @@ export default function App() {
     if (!selectedBiome || selectedBiome.points.length === 0) return null;
     return selectedBiome.points[selectedPointIndex] || selectedBiome.points[0];
   }, [selectedBiome, selectedPointIndex]);
+
+  // Sync weightInputVal when selectedBiome changes or its baseRarity is updated by other actions
+  useEffect(() => {
+    if (selectedBiome) {
+      setWeightInputVal(selectedBiome.baseRarity.toString());
+    }
+  }, [selectedBiomeId, selectedBiome?.baseRarity]);
 
   // Canvas visualizer maps
   const [mapMode, setMapMode] = useState<"slice" | "chunkbase">("slice");
@@ -1148,6 +1192,28 @@ export default function App() {
               </div>
             </div>
 
+            {selectedDimension && (
+              <div className="bg-[#110a0a] border border-[#301614] p-3 rounded-lg mb-4 text-xs">
+                <p className="text-[#a4a090] leading-relaxed mb-2.5">
+                  {selectedDimension.description}
+                </p>
+                <div className="grid grid-cols-2 gap-2 text-[11px] font-mono border-t border-[#1f1313] pt-2">
+                  <div className="bg-[#070505] p-2 rounded border border-[#1c1212] flex items-center justify-between">
+                    <span className="text-[#70685c]">Sea Level:</span>
+                    <span className="text-[#ffab91] font-bold">
+                      {selectedDimension.seaLevel !== undefined ? selectedDimension.seaLevel : "N/A"}
+                    </span>
+                  </div>
+                  <div className="bg-[#070505] p-2 rounded border border-[#1c1212] flex items-center justify-between">
+                    <span className="text-[#70685c]">Default Block:</span>
+                    <span className="text-[#4db6ac] font-bold truncate max-w-[120px]" title={selectedDimension.defaultBlock || "stone"}>
+                      {selectedDimension.defaultBlock || "stone"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between gap-3 mb-4">
               <h2 className="text-sm font-semibold tracking-wider uppercase text-white flex items-center gap-2">
                 <Sliders className="h-4 w-4 text-[#ff7043]" />
@@ -1298,60 +1364,110 @@ export default function App() {
                 <div className="flex flex-col gap-4 mt-1">
                   
                   <div className="flex flex-col gap-3">
-                    <div className="bg-[#110c0c] border border-[#221313] rounded-lg p-3 flex flex-col gap-1.5">
-                      <span className="text-[10px] font-mono text-[#ff7043] font-bold uppercase tracking-wider block">Scale Active Region Space</span>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        <button onClick={() => handleScaleAndBalance(1.35)} className="px-2 py-1.5 bg-[#ff7043]/10 hover:bg-[#ff7043]/20 border border-[#ff7043]/25 text-[#ff7043] rounded text-[11px] cursor-pointer font-mono font-semibold">+35% Scale</button>
-                        <button onClick={() => handleScaleAndBalance(1.75)} className="px-2 py-1.5 bg-[#ff7043]/20 hover:bg-[#ff7043]/30 border border-[#ff7043]/40 text-[#ff7043] rounded text-[11px] cursor-pointer font-mono font-semibold">+75% Scale</button>
-                        <button onClick={() => handleScaleAndBalance(0.5)} className="px-2 py-1.5 bg-[#1a0f0e] border border-[#3e1b17] hover:bg-[#2c1b18] text-white rounded text-[11px] cursor-pointer font-mono font-semibold">Halve (0.5x)</button>
-                        <button onClick={() => handleScaleAndBalance(2.0)} className="px-2 py-1.5 bg-[#1a0f0e] border border-[#3e1b17] hover:bg-[#2c1b18] text-white rounded text-[11px] cursor-pointer font-mono font-semibold">Double (2.0x)</button>
-                      </div>
-                    </div>
-
                     <div className="bg-[#110c0c] border border-[#221313] rounded-lg p-3 flex flex-col gap-2">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                         <span className="text-[10px] font-mono text-[#4db6ac] font-bold uppercase tracking-wider block">Biome Generation Weight (Base Rarity)</span>
                         <div className="flex items-center gap-1.5 self-end sm:self-auto">
-                          <span className="text-[10px] text-[#70685c] font-mono">Current Weight:</span>
-                          <input
+                          <span className="text-[10px] text-[#70685c] font-mono">Current Weight:</span>                          <input
                             type="number"
                             step="0.01"
                             min="0.0001"
                             max="100.0"
-                            value={selectedBiome.baseRarity}
-                            onChange={(e) => handleUpdateCustomBiomeBaseRarity(selectedBiome.id, parseFloat(e.target.value) || 1.0)}
+                            value={weightInputVal}
+                            onChange={(e) => setWeightInputVal(e.target.value)}
+                            onBlur={() => handleCommitWeight(selectedBiome, weightInputVal)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                handleCommitWeight(selectedBiome, weightInputVal);
+                              }
+                            }}
                             className="w-16 bg-[#050303] border border-[#235e5e]/40 rounded px-1.5 py-0.5 text-white text-xs font-mono text-center focus:outline-none focus:border-[#4db6ac]"
                           />
+                          <button
+                            onClick={() => handleResetBiomeToDefault(selectedBiome.id)}
+                            className="text-[10px] bg-rose-950/40 text-rose-300 hover:bg-rose-950/60 border border-rose-900/50 rounded px-2 py-0.5 font-mono cursor-pointer transition font-bold"
+                            title="Reset biome baseRarity and climate slider values to original defaults"
+                          >
+                            Reset ({getOriginalBaseRarity(selectedBiome.id).toFixed(2)})
+                          </button>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2 mt-1">
+                        {/* Standard Absolute Level Presets */}
                         <button 
-                          onClick={() => handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity * 2.0)} 
-                          className="px-2 py-1.5 bg-[#4db6ac]/10 hover:bg-[#4db6ac]/20 border border-[#4db6ac]/25 text-[#4db6ac] rounded text-[11px] cursor-pointer font-mono font-semibold"
-                          title="Double current generation weight"
-                        >
-                          Double Rarity (2x)
-                        </button>
-                        <button 
-                          onClick={() => handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity * 0.5)} 
-                          className="px-2 py-1.5 bg-[#101a18] border border-[#1b3e39] hover:bg-[#1a2e2b] text-white rounded text-[11px] cursor-pointer font-mono font-semibold"
-                          title="Halve current generation weight"
-                        >
-                          Half Rarity (0.5x)
-                        </button>
-                        <button 
-                          onClick={() => handleUpdateCustomBiomeBaseRarity(selectedBiome.id, 1.0)} 
+                          onClick={() => handleUpdateCustomBiomeBaseRarity(selectedBiome.id, 1.0, "common")} 
                           className="px-2 py-1.5 bg-[#0d0909] border border-[#1f1313] hover:bg-[#1f1313] text-[#70685c] rounded text-[11px] cursor-pointer font-mono"
-                          title="Set weight to standard common level (1.0)"
+                          title="Set weight to standard common level (1.0) and expand climate ranges"
                         >
                           Common (1.0)
                         </button>
                         <button 
-                          onClick={() => handleUpdateCustomBiomeBaseRarity(selectedBiome.id, 0.15)} 
+                          onClick={() => handleUpdateCustomBiomeBaseRarity(selectedBiome.id, 0.15, "rare")} 
                           className="px-2 py-1.5 bg-[#0d0909] border border-[#1f1313] hover:bg-[#1f1313] text-[#70685c] rounded text-[11px] cursor-pointer font-mono"
-                          title="Set weight to standard rare level (0.15)"
+                          title="Set weight to standard rare level (0.15) and narrow climate ranges"
                         >
                           Rare (0.15)
+                        </button>
+                        {/* Additive presets (adds factor increments of original default rarity) */}
+                        <button 
+                          onClick={() => {
+                            const orig = getOriginalBaseRarity(selectedBiome.id);
+                            handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity + orig * 1.0, "multiply", 2.0);
+                          }} 
+                          className="px-2 py-1.5 bg-[#4db6ac]/10 hover:bg-[#4db6ac]/20 border border-[#4db6ac]/25 text-[#4db6ac] rounded text-[11px] cursor-pointer font-mono font-semibold"
+                          title="Add 100% of original default base rarity and widen climate ranges by 2.0x"
+                        >
+                          +1.0x (2x)
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const orig = getOriginalBaseRarity(selectedBiome.id);
+                            handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity + orig * 0.5, "multiply", 1.5);
+                          }} 
+                          className="px-2 py-1.5 bg-[#4db6ac]/10 hover:bg-[#4db6ac]/20 border border-[#4db6ac]/25 text-[#4db6ac] rounded text-[11px] cursor-pointer font-mono font-semibold"
+                          title="Add 50% of original default base rarity and widen climate ranges by 1.5x"
+                        >
+                          +0.5x (1.5x)
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const orig = getOriginalBaseRarity(selectedBiome.id);
+                            handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity - orig * 0.25, "multiply", 0.75);
+                          }} 
+                          className="px-2 py-1.5 bg-[#101a18] border border-[#1b3e39] hover:bg-[#1a2e2b] text-white rounded text-[11px] cursor-pointer font-mono font-semibold"
+                          title="Subtract 25% of original default base rarity and narrow climate ranges by 0.75x"
+                        >
+                          -0.25x (0.75x)
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const orig = getOriginalBaseRarity(selectedBiome.id);
+                            handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity - orig * 0.5, "multiply", 0.5);
+                          }} 
+                          className="px-2 py-1.5 bg-[#101a18] border border-[#1b3e39] hover:bg-[#1a2e2b] text-white rounded text-[11px] cursor-pointer font-mono font-semibold"
+                          title="Subtract 50% of original default base rarity and narrow climate ranges by 0.5x"
+                        >
+                          -0.5x (0.5x)
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const orig = getOriginalBaseRarity(selectedBiome.id);
+                            handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity + orig * 2.0, "multiply", 3.0);
+                          }} 
+                          className="px-2 py-1.5 bg-[#4db6ac]/15 hover:bg-[#4db6ac]/25 border border-[#4db6ac]/30 text-[#4db6ac] rounded text-[11px] cursor-pointer font-mono font-semibold"
+                          title="Add 200% of original default base rarity and widen climate ranges by 3.0x"
+                        >
+                          +2.0x (3x)
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const orig = getOriginalBaseRarity(selectedBiome.id);
+                            handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity - orig * 0.75, "multiply", 0.25);
+                          }} 
+                          className="px-2 py-1.5 bg-[#101a18] border border-[#1b3e39] hover:bg-[#1a2e2b] text-white rounded text-[11px] cursor-pointer font-mono font-semibold"
+                          title="Subtract 75% of original default base rarity and narrow climate ranges by 0.25x"
+                        >
+                          -0.75x (0.25x)
                         </button>
                       </div>
                     </div>
@@ -1420,7 +1536,116 @@ export default function App() {
                     })}
                   </div>
 
-                  <p className="text-[10px] text-[#70685c] italic leading-relaxed mt-1">
+                  {/* Climate Presets Section */}
+                  <div className="bg-[#110c0c] border border-[#221313] p-3 rounded-lg mt-2">
+                    <span className="text-[10px] font-mono text-[#ff7043] font-bold uppercase tracking-wider block mb-2">
+                      Quick Climate Presets (Applies to all 6 sliders)
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {[
+                        { name: "Plains-like", desc: "Flat, temperate, moderately dry", icon: "🌱", values: { temp: { min: -0.15, max: 0.15 }, hum: { min: -0.1, max: 0.1 }, cont: { min: 0.1, max: 0.4 }, eros: { min: 0.2, max: 0.6 }, weird: { min: -0.2, max: 0.2 }, depth: { min: 0.0, max: 0.2 } } },
+                        { name: "Mountain Peaks", desc: "Cold, dry, rugged slopes", icon: "🏔️", values: { temp: { min: -0.5, max: 0.0 }, hum: { min: -0.3, max: 0.3 }, cont: { min: 0.55, max: 1.0 }, eros: { min: -0.8, max: -0.4 }, weird: { min: 0.3, max: 0.8 }, depth: { min: 0.5, max: 1.5 } } },
+                        { name: "Desert Dunes", desc: "Hot, arid sand dunes", icon: "🏜️", values: { temp: { min: 0.8, max: 1.5 }, hum: { min: -1.0, max: -0.6 }, cont: { min: 0.2, max: 0.6 }, eros: { min: -0.4, max: 0.2 }, weird: { min: -0.5, max: 0.5 }, depth: { min: -0.1, max: 0.1 } } },
+                        { name: "Swampy Wet", desc: "Warm, extremely humid swamp", icon: "🐊", values: { temp: { min: 0.4, max: 0.8 }, hum: { min: 0.6, max: 1.0 }, cont: { min: -0.1, max: 0.2 }, eros: { min: 0.2, max: 0.6 }, weird: { min: -0.3, max: 0.1 }, depth: { min: -0.2, max: 0.0 } } },
+                        { name: "Deep Ocean", desc: "Wet, deep ocean floor", icon: "🌊", values: { temp: { min: -0.2, max: 0.5 }, hum: { min: -0.5, max: 0.5 }, cont: { min: -1.0, max: -0.25 }, eros: { min: -0.5, max: 0.5 }, weird: { min: -1.0, max: 1.0 }, depth: { min: -1.5, max: -0.8 } } },
+                        { name: "Underground Caves", desc: "Cool subterranean cave", icon: "🕳️", values: { temp: { min: -0.1, max: 0.1 }, hum: { min: -0.1, max: 0.1 }, cont: { min: 0.2, max: 1.0 }, eros: { min: -0.2, max: 0.2 }, weird: { min: 0.4, max: 1.0 }, depth: { min: -1.5, max: -1.0 } } }
+                      ].map(preset => (
+                        <button
+                          key={preset.name}
+                          type="button"
+                          onClick={() => handleApplyClimateTemplate(preset.values)}
+                          className="px-2 py-1.5 bg-[#0d0909] border border-[#221313] hover:border-[#ff7043] hover:bg-[#110c0c] rounded text-[11px] text-[#a4a090] text-left cursor-pointer transition flex flex-col gap-0.5"
+                          title={preset.desc}
+                        >
+                          <span className="font-bold text-white flex items-center gap-1">
+                            <span>{preset.icon}</span>
+                            <span>{preset.name}</span>
+                          </span>
+                          <span className="text-[9px] text-[#70685c] leading-tight truncate">{preset.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* MCreator Clipboard Exporter Section */}
+                  <div className="bg-[#110c0c] border border-[#221313] p-3 rounded-lg mt-2">
+                    <div className="flex items-center justify-between border-b border-[#221313] pb-2 mb-2">
+                      <div className="flex items-center gap-1.5">
+                        <Terminal className="h-3.5 w-3.5 text-[#ff7043]" />
+                        <span className="text-[10px] font-mono text-[#ff7043] font-bold uppercase tracking-wider block">
+                          MCreator Parameter Exporter
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const jsonStr = JSON.stringify({
+                            temperature: [activePoint.temp.min, activePoint.temp.max],
+                            humidity: [activePoint.hum.min, activePoint.hum.max],
+                            continentalness: [activePoint.cont.min, activePoint.cont.max],
+                            erosion: [activePoint.eros.min, activePoint.eros.max],
+                            weirdness: [activePoint.weird.min, activePoint.weird.max],
+                            depth: [activePoint.depth.min, activePoint.depth.max]
+                          }, null, 2);
+                          navigator.clipboard.writeText(jsonStr);
+                          setCopiedField("json");
+                          setTimeout(() => setCopiedField(null), 1500);
+                        }}
+                        className="text-[9px] bg-[#ff7043]/10 hover:bg-[#ff7043]/20 text-[#ff7043] border border-[#ff7043]/30 px-2 py-0.5 rounded font-mono font-semibold flex items-center gap-1 cursor-pointer transition"
+                      >
+                        {copiedField === "json" ? "✓ Copied!" : "📋 Copy All as JSON"}
+                      </button>
+                    </div>
+
+                    <p className="text-[9px] text-[#70685c] leading-relaxed mb-2.5">
+                      Click the values below to instantly copy them for fast pasting into MCreator biome editor min/max fields:
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono">
+                      {[
+                        { label: "Temperature", min: activePoint.temp.min, max: activePoint.temp.max, key: "temp" },
+                        { label: "Humidity / Veg", min: activePoint.hum.min, max: activePoint.hum.max, key: "hum" },
+                        { label: "Continentalness", min: activePoint.cont.min, max: activePoint.cont.max, key: "cont" },
+                        { label: "Erosion", min: activePoint.eros.min, max: activePoint.eros.max, key: "eros" },
+                        { label: "Weirdness", min: activePoint.weird.min, max: activePoint.weird.max, key: "weird" },
+                        { label: "Depth", min: activePoint.depth.min, max: activePoint.depth.max, key: "depth" }
+                      ].map(field => {
+                        return (
+                          <div key={field.label} className="bg-[#050303] border border-[#1f1212] p-2 rounded flex flex-col gap-1.5 justify-between">
+                            <span className="text-[#a4a090] text-[10px] font-bold">{field.label}:</span>
+                            <div className="flex items-center gap-1.5 justify-between">
+                              {/* Min button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(field.min.toFixed(4));
+                                  setCopiedField(`${field.key}-min`);
+                                  setTimeout(() => setCopiedField(null), 1000);
+                                }}
+                                className="flex-1 px-1.5 py-1 bg-[#100b0b] border border-[#ff7043]/20 hover:border-[#ff7043]/50 text-white rounded text-center text-[10px] transition cursor-pointer font-bold"
+                              >
+                                {copiedField === `${field.key}-min` ? "✓ Copied!" : `Min: ${field.min.toFixed(4)}`}
+                              </button>
+                              {/* Max button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(field.max.toFixed(4));
+                                  setCopiedField(`${field.key}-max`);
+                                  setTimeout(() => setCopiedField(null), 1000);
+                                }}
+                                className="flex-1 px-1.5 py-1 bg-[#100b0b] border border-[#ff7043]/20 hover:border-[#ff7043]/50 text-white rounded text-center text-[10px] transition cursor-pointer font-bold"
+                              >
+                                {copiedField === `${field.key}-max` ? "✓ Copied!" : `Max: ${field.max.toFixed(4)}`}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-[#70685c] italic leading-relaxed mt-3">
                     <span>* Slide the climate ranges or adjust the generation weights to reshape your biomes. Updates will instantly refresh the 6D slice maps and 2D world visualizer. Use the "Restore Defaults" button in the biomes directory to reset a dimension's configurations anytime.</span>
                   </p>
 
@@ -1429,101 +1654,7 @@ export default function App() {
             </div>
           )}
 
-          {/* NOISE ROUTER INPUTS PANEL */}
-          <div className="bg-[#0c0808] border border-[#1c1212] rounded-xl p-4 sm:p-5 flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#1c1212] pb-3 gap-2">
-              <div>
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  <Terminal className="h-4 w-4 text-[#ff7043]" />
-                  Noise Router Climate Inputs
-                </h3>
-                <p className="text-[11px] text-[#8c8779] mt-0.5 font-mono">Provide exact coordinates in the 6-dimensional noise continuum</p>
-              </div>
-              <button
-                onClick={() => {
-                  setRouterTemp(0.0);
-                  setRouterHum(0.0);
-                  setRouterCont(0.0);
-                  setRouterEros(0.0);
-                  setRouterWeird(0.0);
-                  setRouterDepth(0.0);
-                }}
-                className="text-[11px] text-[#ff7043] hover:text-white transition flex items-center gap-1 bg-[#1a0f0e] border border-[#521c16] px-2.5 py-1.5 rounded font-mono"
-              >
-                <RefreshCw className="h-3 w-3" />
-                Zero Inputs
-              </button>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {([
-                { key: "temp", label: "Temperature (T)", value: routerTemp, setter: setRouterTemp, color: "border-l-[#ff8a65]", textCol: "text-[#ff8a65]" },
-                { key: "hum", label: "Humidity / Veg (H)", value: routerHum, setter: setRouterHum, color: "border-l-[#4db6ac]", textCol: "text-[#4db6ac]" },
-                { key: "cont", label: "Continentalness (C)", value: routerCont, setter: setRouterCont, color: "border-l-[#9ccc65]", textCol: "text-[#9ccc65]" },
-                { key: "eros", label: "Erosion (E)", value: routerEros, setter: setRouterEros, color: "border-l-[#64b5f6]", textCol: "text-[#64b5f6]" },
-                { key: "weird", label: "Weirdness (W)", value: routerWeird, setter: setRouterWeird, color: "border-l-[#ba68c8]", textCol: "text-[#ba68c8]" },
-                { key: "depth", label: "Depth / Offset (D)", value: routerDepth, setter: setRouterDepth, color: "border-l-sky-400", textCol: "text-sky-400" },
-              ] as const).map(item => (
-                <div key={item.key} className={`bg-[#0d0909] border border-[#1f1313] border-l-3 ${item.color} p-3 rounded-lg flex flex-col justify-between gap-1.5`}>
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className={`font-semibold ${item.textCol}`}>{item.label}</span>
-                    <PreciseNumberInput
-                      value={item.value}
-                      onChange={item.setter}
-                      className="w-16 bg-[#050303] border border-[#3e1f1a] rounded px-1.5 py-0.5 text-white text-center text-xs font-mono focus:outline-none focus:border-[#ff7043]"
-                    />
-                  </div>
-                  <input
-                    type="range"
-                    min="-2.0"
-                    max="2.0"
-                    step="0.01"
-                    value={item.value}
-                    onChange={(e) => item.setter(parseFloat(e.target.value))}
-                    className="w-full accent-[#ff7043] cursor-pointer h-1.5"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* F3 DIAGNOSTICS & CLIPBOARD COPY */}
-          <div className="bg-[#0c0808] border border-[#1c1212] rounded-xl p-4 sm:p-5 flex flex-col gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <FileText className="h-4 w-4 text-[#ff7043]" />
-                F3 Climate Diagnostics Parser
-              </h3>
-              <p className="text-[11px] text-[#8c8779] mt-0.5">
-                Paste any console message, clipboard, or F3 debug screen lines below to auto-populate the Noise Router inputs.
-              </p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-2 mt-1">
-              <input
-                type="text"
-                value={f3InputText}
-                onChange={(e) => setF3InputText(e.target.value)}
-                placeholder="e.g. Biome: cherry_grove T: -0.15 C: 0.35 E: -0.42 W: 0.1..."
-                className="flex-1 bg-[#050303] border border-[#421b16] rounded-lg px-3 py-2 text-white text-xs font-mono focus:outline-none focus:border-[#ff7043] placeholder-[#4d322f]"
-              />
-              <button
-                onClick={handleParseF3Diagnostics}
-                className="px-4 py-2 bg-[#ff7043] hover:bg-[#ff8a65] text-[#080808] font-bold rounded-lg text-xs transition cursor-pointer font-mono flex items-center gap-1 shrink-0 justify-center"
-              >
-                Parse &amp; Populate
-              </button>
-            </div>
-            {f3ParseError && (
-              <span className="text-[11px] text-red-400 font-mono italic">{f3ParseError}</span>
-            )}
-            {f3SuccessMessage && (
-              <span className="text-[11px] text-emerald-400 font-mono italic">{f3SuccessMessage}</span>
-            )}
-            <div className="text-[10px] text-[#70685c] font-mono leading-relaxed bg-[#110c0c] p-2.5 rounded border border-[#221313] mt-1">
-              <span className="text-[#ff7043] font-bold">Supported format keywords:</span> any text block containing numbers matching <code className="text-white">T:</code>, <code className="text-white">H:</code>, <code className="text-white">C:</code>, <code className="text-white">E:</code>, <code className="text-white">W:</code>, <code className="text-white">D:</code> labels.
-            </div>
-          </div>
 
         </section>
 

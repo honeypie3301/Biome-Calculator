@@ -34,6 +34,8 @@ export interface DimensionDefinition {
     weird: number;
     depth: number;
   };
+  seaLevel?: number;
+  defaultBlock?: string;
 }
 
 // Bounding box helper to convert multiple points into a single overall bounding box
@@ -80,6 +82,8 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
     name: "The Grain",
     description: "Vast, woodbound world of colossal arches, high tension nests, and hidden grids.",
     defaultFixed: { temp: 0.2, hum: 0.0, cont: 0.85, eros: 0.0, weird: 0.5, depth: 0.0 },
+    seaLevel: 63,
+    defaultBlock: "lignum_caro",
     biomes: [
       {
         id: "uniform_grain",
@@ -89,11 +93,11 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
         baseRarity: 1.0,
         points: [
           {
-            temp: { min: -0.5, max: 0.5 },
-            hum: { min: -0.3, max: 0.5 },
-            cont: { min: -1.0, max: 0.2 },
-            eros: { min: -1.0, max: 0.2 },
-            weird: { min: -1.0, max: -0.3 },
+            temp: { min: -0.221, max: 0.221 },
+            hum: { min: -0.0769, max: 0.2769 },
+            cont: { min: -0.6654, max: -0.1346 },
+            eros: { min: -0.6654, max: -0.1346 },
+            weird: { min: -0.8046, max: -0.4954 },
             depth: { min: -1.0, max: 1.0 }
           }
         ]
@@ -190,6 +194,8 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
     name: "The Petrified Weald",
     description: "An ancient, silent land where vegetation and the ground itself have hardened into stone.",
     defaultFixed: { temp: 0.0, hum: 0.0, cont: 0.0, eros: 0.3, weird: 0.4, depth: 0.0 },
+    seaLevel: 63,
+    defaultBlock: "petrified_rotten_oak_wood",
     biomes: [
       {
         id: "weald_outskirts",
@@ -199,11 +205,11 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
         baseRarity: 1.0,
         points: [
           {
-            temp: { min: -0.5, max: 0.0 },
-            hum: { min: -0.5, max: 0.0 },
-            cont: { min: -0.5, max: 0.5 },
-            eros: { min: 0.2, max: 0.5 },
-            weird: { min: 0.0, max: 0.3 },
+            temp: { min: -0.4256, max: -0.0744 },
+            hum: { min: -0.4256, max: -0.0744 },
+            cont: { min: -0.3513, max: 0.3513 },
+            eros: { min: 0.2445, max: 0.4555 },
+            weird: { min: 0.0445, max: 0.2555 },
             depth: { min: -1.0, max: 1.0 }
           }
         ]
@@ -283,6 +289,8 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
     name: "The Backwoods",
     description: "The dark, dense primal layers of ancient towering trunks and overgrown thickets.",
     defaultFixed: { temp: 0.0, hum: 0.2, cont: 0.5, eros: -0.3, weird: 0.5, depth: 0.0 },
+    seaLevel: 0,
+    defaultBlock: "lignum_caro",
     biomes: [
       {
         id: "wood_plains",
@@ -342,6 +350,8 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
     name: "The Familiar",
     description: "A surreal mirror world, replicating Overworld structures and biomes with glass-like materials.",
     defaultFixed: { temp: 0.3, hum: 0.0, cont: -0.4, eros: 0.0, weird: -0.2, depth: 0.0 },
+    seaLevel: 63,
+    defaultBlock: "stone",
     biomes: [
       {
         id: "mirrored_plains",
