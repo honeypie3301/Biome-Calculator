@@ -366,7 +366,7 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
             cont: { min: -1.0, max: -0.2 },
             eros: { min: -0.35, max: 0.25 },
             weird: { min: -0.5, max: 0.0 },
-            depth: { min: -1.0, max: 1.0 }
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -383,7 +383,7 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
             cont: { min: 0.3, max: 1.0 },
             eros: { min: -0.5, max: 0.5 },
             weird: { min: -1.0, max: 1.0 },
-            depth: { min: -1.0, max: 1.0 }
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -400,7 +400,7 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
             cont: { min: 0.3, max: 1.0 },
             eros: { min: -0.5, max: 0.5 },
             weird: { min: -1.0, max: 1.0 },
-            depth: { min: -1.0, max: 1.0 }
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -417,7 +417,7 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
             cont: { min: 0.3, max: 1.0 },
             eros: { min: -0.5, max: 0.5 },
             weird: { min: -1.0, max: 1.0 },
-            depth: { min: -1.0, max: 1.0 }
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -434,7 +434,7 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
             cont: { min: 0.3, max: 1.0 },
             eros: { min: -0.5, max: 0.5 },
             weird: { min: -1.0, max: 1.0 },
-            depth: { min: -1.0, max: 1.0 }
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -451,7 +451,7 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
             cont: { min: 0.3, max: 1.0 },
             eros: { min: -0.7, max: 0.5 },
             weird: { min: -1.0, max: 0.8 },
-            depth: { min: -1.0, max: 1.0 }
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -468,7 +468,7 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
             cont: { min: -1.0, max: -0.2 },
             eros: { min: -0.5, max: 0.5 },
             weird: { min: -1.0, max: 1.0 },
-            depth: { min: -1.0, max: 1.0 }
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       },
@@ -485,7 +485,7 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
             cont: { min: 0.3, max: 1.0 },
             eros: { min: -0.1, max: 0.4 },
             weird: { min: -1.0, max: 1.0 },
-            depth: { min: -1.0, max: 1.0 }
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       }
@@ -510,7 +510,7 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
             cont: { min: -0.0001, max: 0.0 },
             eros: { min: 0.8, max: 1.0 },
             weird: { min: -0.0001, max: 0.0 },
-            depth: { min: -1.0, max: 1.0 }
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       }
@@ -535,7 +535,7 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
             cont: { min: -0.0001, max: 0.0 },
             eros: { min: 0.8, max: 1.0 },
             weird: { min: -0.0001, max: 0.0 },
-            depth: { min: -1.0, max: 1.0 }
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       }
@@ -560,7 +560,7 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
             cont: { min: 0.3, max: 0.5 },
             eros: { min: 0.8, max: 1.0 },
             weird: { min: -0.1, max: 0.1 },
-            depth: { min: -1.0, max: 1.0 }
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       }
@@ -585,7 +585,7 @@ export const BACKWOODS_DIMENSIONS: DimensionDefinition[] = [
             cont: { min: -0.2, max: 0.3 },
             eros: { min: 0.7, max: 1.0 },
             weird: { min: -1.0, max: -0.5 },
-            depth: { min: -1.0, max: 1.0 }
+            depth: { min: 0.0, max: 0.0 }
           }
         ]
       }

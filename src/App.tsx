@@ -1,8 +1,27 @@
+/*
+ * ==============================================================================
+ * CRITICAL DEVELOPER & CI/CD REMINDERS:
+ * 1. NEVER DELETE .github/workflows/deploy.yml!
+ *    This workflow file is strictly required for automated GitHub Pages deployment.
+ * 2. UI THEME HARMONY & INTEGRITY:
+ *    Always style dropdown menus, buttons, inputs, tabs, checkboxes, and interactive controls
+ *    to fit the app's dark Minecraft ember palette:
+ *    - Base surfaces: #070505 (bg), #0c0808 (panels), #110c0c (nested cards)
+ *    - Borders: #1c1212, #221313, #301614, #521c16
+ *    - Accents: #ff7043 (ember orange), #ff8a65, #4db6ac (teal), #9ccc65 (lime)
+ *    - Sliders: Non-glowing matte sliders with tactile blocky thumbs
+ * 3. NO BUTTON OVERFLOWS OR OVERLAPPING:
+ *    Never allow buttons to overflow or overlap adjacent card borders!
+ *    Always keep min-w-0 on flex/grid parent containers and inputs, and shrink-0
+ *    with whitespace-nowrap on all action buttons.
+ * ==============================================================================
+ */
+
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Sliders, 
-  Map, 
+  Map as MapIcon, 
   AlertTriangle, 
   Info, 
   HelpCircle, 
@@ -26,7 +45,17 @@ import {
   Trash2,
   Plus,
   Terminal,
-  FileText
+  FileText,
+  X,
+  BarChart2,
+  Users,
+  Shield,
+  ShieldAlert,
+  EyeOff,
+  Eye,
+  Clock,
+  Laptop,
+  MousePointerClick
 } from "lucide-react";
 import { 
   BACKWOODS_DIMENSIONS,
@@ -36,6 +65,13 @@ import {
   ClimateRange, 
   getBiomeBounds 
 } from "./biomeData";
+import {
+  logVisitorSession,
+  subscribeToVisitorAnalytics,
+  isDeviceOptedOut,
+  setDeviceOptedOut,
+  AnalyticsData
+} from "./services/visitorTracking";
 
 // Deterministic seed-based noise sampler matching standard Minecraft-like multi-noise systems
 class SimplePerlin {
@@ -140,8 +176,9 @@ class DoublePerlin {
 }
 
 const subtleNoise = (x: number, y: number, s: number) => {
-  const sinX = Math.sin(x * 12.9898 + y * 78.233 + s * 43758.5453);
-  return (sinX - Math.floor(sinX));
+  let n = ((x * 374761393 + y * 668265263 + s * 3266489917) >>> 0);
+  n = (n ^ (n >> 13)) * 1274126177;
+  return (((n ^ (n >> 16)) & 255) / 255);
 };
 
 // Precise number input component
@@ -342,6 +379,55 @@ export default function App() {
 
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [weightInputVal, setWeightInputVal] = useState<string>("");
+  const [showClimatePresets, setShowClimatePresets] = useState<boolean>(false);
+  const [showExporter, setShowExporter] = useState<boolean>(false);
+  const [showHelpNoteModal, setShowHelpNoteModal] = useState<boolean>(false);
+  const [showStatsModal, setShowStatsModal] = useState<boolean>(false);
+  const [trackingOptedOut, setTrackingOptedOut] = useState<boolean>(isDeviceOptedOut);
+  const [trackingNotice, setTrackingNotice] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsData>({
+    totalVisits: 0,
+    uniqueVisitors: 0,
+    todayVisits: 0,
+    records: [],
+    isLive: false
+  });
+
+  // Close modals with Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowHelpNoteModal(false);
+        setShowStatsModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Live Firestore visitor telemetry
+  useEffect(() => {
+    logVisitorSession();
+    const unsubscribe = subscribeToVisitorAnalytics((data) => {
+      setAnalytics(data);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Double-click handler to stop/resume tracking device
+  const handleToggleDeviceTracking = () => {
+    const nextState = !trackingOptedOut;
+    setTrackingOptedOut(nextState);
+    setDeviceOptedOut(nextState);
+    if (nextState) {
+      setTrackingNotice("Device tracking stopped! Your device is now completely excluded from live visitor logs.");
+    } else {
+      setTrackingNotice("Device tracking re-enabled. Live telemetry resumed for this device.");
+      logVisitorSession();
+    }
+    setTimeout(() => setTrackingNotice(null), 4000);
+  };
+
 
   // LocalStorage persistence for ONLY custom sandbox biomes
   useEffect(() => {
@@ -988,7 +1074,20 @@ export default function App() {
     return bestBiome;
   }, [biomes, showOceans, showRivers, selectedDimensionId, matchingAlgorithm]);
 
-  // Main canvas rendering
+  // Pre-parse biome RGB to avoid string splitting and parseInt in tight pixel loops
+  const biomeRgbMap = useMemo(() => {
+    const map = new Map<string, [number, number, number]>();
+    for (const b of biomes) {
+      const hex = b.color.replace("#", "");
+      const r = parseInt(hex.substring(0, 2), 16) || 0;
+      const g = parseInt(hex.substring(2, 4), 16) || 0;
+      const bv = parseInt(hex.substring(4, 6), 16) || 0;
+      map.set(b.id, [r, g, bv]);
+    }
+    return map;
+  }, [biomes]);
+
+  // Main canvas rendering optimized with RAF and precomputed colors
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -996,102 +1095,103 @@ export default function App() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const width = canvas.width;
-    const height = canvas.height;
-    const imgData = ctx.createImageData(width, height);
-    const step = (isDragging || isDraggingSlider) ? 4 : 1;
+    let animId: number;
 
-    if (mapMode === "slice") {
-      // 6D Coordinate Slice Projection
-      for (let py = 0; py < height; py += step) {
-        for (let px = 0; px < width; px += step) {
-          const valX = -1.0 + (px / width) * 2.0;
+    const render = () => {
+      const width = canvas.width;
+      const height = canvas.height;
+      const imgData = ctx.createImageData(width, height);
+      const step = (isDragging || isDraggingSlider) ? 4 : 1;
+
+      if (mapMode === "slice") {
+        // 6D Coordinate Slice Projection
+        for (let py = 0; py < height; py += step) {
           const valY = 1.0 - (py / height) * 2.0;
 
-          let t = routerTemp;
-          let h = routerHum;
-          let c = routerCont;
-          let e = routerEros;
-          let w = routerWeird;
-          let d = routerDepth;
+          for (let px = 0; px < width; px += step) {
+            const valX = -1.0 + (px / width) * 2.0;
 
-          if (xAxisDim === "temp") t = valX;
-          else if (xAxisDim === "hum") h = valX;
-          else if (xAxisDim === "cont") c = valX;
-          else if (xAxisDim === "eros") e = valX;
-          else if (xAxisDim === "weird") w = valX;
-          else if (xAxisDim === "depth") d = valX;
+            let t = routerTemp;
+            let h = routerHum;
+            let c = routerCont;
+            let e = routerEros;
+            let w = routerWeird;
+            let d = routerDepth;
 
-          if (yAxisDim === "temp") t = valY;
-          else if (yAxisDim === "hum") h = valY;
-          else if (yAxisDim === "cont") c = valY;
-          else if (yAxisDim === "eros") e = valY;
-          else if (yAxisDim === "weird") w = valY;
-          else if (yAxisDim === "depth") d = valY;
+            if (xAxisDim === "temp") t = valX;
+            else if (xAxisDim === "hum") h = valX;
+            else if (xAxisDim === "cont") c = valX;
+            else if (xAxisDim === "eros") e = valX;
+            else if (xAxisDim === "weird") w = valX;
+            else if (xAxisDim === "depth") d = valX;
 
-          const matched = getBiomeAtNoise(t, h, c, e, w, d, 0.5);
-          const biomeColor = matched ? matched.color : "#0a0707";
+            if (yAxisDim === "temp") t = valY;
+            else if (yAxisDim === "hum") h = valY;
+            else if (yAxisDim === "cont") c = valY;
+            else if (yAxisDim === "eros") e = valY;
+            else if (yAxisDim === "weird") w = valY;
+            else if (yAxisDim === "depth") d = valY;
 
-          const r = parseInt(biomeColor.slice(1, 3), 16);
-          const g = parseInt(biomeColor.slice(3, 5), 16);
-          const b = parseInt(biomeColor.slice(5, 7), 16);
+            const matched = getBiomeAtNoise(t, h, c, e, w, d, 0.5);
+            const rgb = matched ? (biomeRgbMap.get(matched.id) || [10, 7, 7]) : [10, 7, 7];
 
-          const n = subtleNoise(px, py, simulationSeed) * 12 - 6;
-          const r_final = Math.max(0, Math.min(255, r + n));
-          const g_final = Math.max(0, Math.min(255, g + n));
-          const b_final = Math.max(0, Math.min(255, b + n));
+            const n = (subtleNoise(px, py, simulationSeed) * 12 - 6) | 0;
+            const r_final = Math.max(0, Math.min(255, rgb[0] + n));
+            const g_final = Math.max(0, Math.min(255, rgb[1] + n));
+            const b_final = Math.max(0, Math.min(255, rgb[2] + n));
 
-          for (let dy = 0; dy < step; dy++) {
-            for (let dx = 0; dx < step; dx++) {
-              const index = ((py + dy) * width + (px + dx)) * 4;
-              if (index < imgData.data.length) {
-                imgData.data[index] = r_final;
-                imgData.data[index + 1] = g_final;
-                imgData.data[index + 2] = b_final;
-                imgData.data[index + 3] = 255;
+            for (let dy = 0; dy < step; dy++) {
+              for (let dx = 0; dx < step; dx++) {
+                const index = ((py + dy) * width + (px + dx)) * 4;
+                if (index < imgData.data.length) {
+                  imgData.data[index] = r_final;
+                  imgData.data[index + 1] = g_final;
+                  imgData.data[index + 2] = b_final;
+                  imgData.data[index + 3] = 255;
+                }
               }
             }
           }
         }
-      }
-    } else {
-      // Chunkbase 2D World Map Simulation
-      for (let py = 0; py < height; py += step) {
-        for (let px = 0; px < width; px += step) {
-          const worldX = chunkbaseX + (px - width / 2) * (chunkbaseZoom / width);
+      } else {
+        // Chunkbase 2D World Map Simulation
+        for (let py = 0; py < height; py += step) {
           const worldZ = chunkbaseZ + (py - height / 2) * (chunkbaseZoom / height);
 
-          const { t, h, c, e, w, d, riverVal } = getNoiseAtCoordinates(worldX, worldZ, simulationSeed);
-          const matched = getBiomeAtNoise(t, h, c, e, w, d, riverVal);
-          const biomeColor = matched ? matched.color : "#0a0707";
+          for (let px = 0; px < width; px += step) {
+            const worldX = chunkbaseX + (px - width / 2) * (chunkbaseZoom / width);
 
-          const r = parseInt(biomeColor.slice(1, 3), 16);
-          const g = parseInt(biomeColor.slice(3, 5), 16);
-          const b = parseInt(biomeColor.slice(5, 7), 16);
+            const { t, h, c, e, w, d, riverVal } = getNoiseAtCoordinates(worldX, worldZ, simulationSeed);
+            const matched = getBiomeAtNoise(t, h, c, e, w, d, riverVal);
+            const rgb = matched ? (biomeRgbMap.get(matched.id) || [10, 7, 7]) : [10, 7, 7];
 
-          const n = subtleNoise(px, py, simulationSeed) * 10 - 5;
-          const r_final = Math.max(0, Math.min(255, r + n));
-          const g_final = Math.max(0, Math.min(255, g + n));
-          const b_final = Math.max(0, Math.min(255, b + n));
+            const n = (subtleNoise(px, py, simulationSeed) * 10 - 5) | 0;
+            const r_final = Math.max(0, Math.min(255, rgb[0] + n));
+            const g_final = Math.max(0, Math.min(255, rgb[1] + n));
+            const b_final = Math.max(0, Math.min(255, rgb[2] + n));
 
-          for (let dy = 0; dy < step; dy++) {
-            for (let dx = 0; dx < step; dx++) {
-              const index = ((py + dy) * width + (px + dx)) * 4;
-              if (index < imgData.data.length) {
-                imgData.data[index] = r_final;
-                imgData.data[index + 1] = g_final;
-                imgData.data[index + 2] = b_final;
-                imgData.data[index + 3] = 255;
+            for (let dy = 0; dy < step; dy++) {
+              for (let dx = 0; dx < step; dx++) {
+                const index = ((py + dy) * width + (px + dx)) * 4;
+                if (index < imgData.data.length) {
+                  imgData.data[index] = r_final;
+                  imgData.data[index + 1] = g_final;
+                  imgData.data[index + 2] = b_final;
+                  imgData.data[index + 3] = 255;
+                }
               }
             }
           }
         }
       }
-    }
 
-    ctx.putImageData(imgData, 0, 0);
+      ctx.putImageData(imgData, 0, 0);
+    };
+
+    animId = requestAnimationFrame(render);
+    return () => cancelAnimationFrame(animId);
   }, [
-    biomes, xAxisDim, yAxisDim, routerTemp, routerHum, routerCont, routerEros, routerWeird, routerDepth,
+    biomes, biomeRgbMap, xAxisDim, yAxisDim, routerTemp, routerHum, routerCont, routerEros, routerWeird, routerDepth,
     mapMode, chunkbaseX, chunkbaseZ, chunkbaseZoom, showOceans, showRivers, simulationSeed,
     getNoiseAtCoordinates, getBiomeAtNoise, isDragging, isDraggingSlider
   ]);
@@ -1222,104 +1322,102 @@ export default function App() {
     <div className="min-h-screen w-full flex flex-col bg-[#070505] text-[#a4a090] font-sans antialiased selection:bg-[#ff7043] selection:text-white overflow-x-hidden">
       
       {/* HEADER SECTION */}
-      <header className="border-b border-[#1c1212] bg-[#0c0808] py-4 px-4 sm:px-6 shrink-0">
-        <div className="max-w-7xl mx-auto w-full flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 bg-[#ff7043] rounded flex items-center justify-center text-[#080808] shrink-0">
-              <Compass className="h-6 w-6 stroke-[2]" />
-            </div>
-            <div>
-              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white flex flex-wrap items-center gap-2">
-                Backwoods Biome Rarity Calculator <span className="text-[10px] bg-[#221010] text-[#ff7043] px-2 py-0.5 rounded border border-[#521313] font-mono">1.21.1 Multi-Noise</span>
-              </h1>
-              <p className="text-xs text-[#8c8779] mt-0.5">Custom Mod Dimensions & Mojang Multi-Noise 6D Coordinate Matcher</p>
-            </div>
+      <header className="border-b border-[#1c1212] bg-[#0c0808] py-2 px-4 sm:px-6 shrink-0">
+        <div className="max-w-[1700px] mx-auto w-full flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+          <div className="flex flex-col">
+            <h1 className="text-base sm:text-lg font-bold tracking-tight text-white">
+              Backwoods Biome Rarity Calculator
+            </h1>
+            <p className="text-xs text-[#a4a090]">Custom Mod Dimensions & Mojang Multi-Noise 6D Coordinate Matcher</p>
           </div>
-          <div className="flex items-center gap-2 text-xs bg-[#110c0c] border border-[#221313] px-3 py-2 rounded self-start sm:self-auto">
-            <span className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse"></span>
-            <span className="text-[#8c8779] font-mono">Precision: 6D Noise Matrix</span>
+          
+          <div className="flex items-center gap-2.5 self-start sm:self-auto">
+            {/* HELP NOTE BUTTON: Standard themed button with NO emoji */}
+            <button
+              type="button"
+              onClick={() => setShowHelpNoteModal(true)}
+              className="flex items-center gap-1.5 text-xs bg-[#1a0f0e] hover:bg-[#251513] text-[#ff8a65] hover:text-white border border-[#521c16] hover:border-[#ff7043] px-2.5 py-1 rounded font-mono font-bold transition cursor-pointer"
+              title="Open multi-noise guide and biome configuration notes"
+            >
+              <FileText className="h-3.5 w-3.5 text-[#ff7043]" />
+              Help Note
+            </button>
+            {/* SECRET BUTTON HIDDEN IN PLAIN SIGHT: Diagnostic telemetry & visitor tracking */}
+            <button
+              type="button"
+              onClick={() => setShowStatsModal(true)}
+              className="flex items-center gap-2 text-xs bg-[#110c0c] hover:bg-[#1a0f0e] border border-[#221313] hover:border-[#521c16] px-2.5 py-1 rounded transition cursor-pointer group"
+              title="Matrix Diagnostic & Visitor Analytics"
+            >
+              <span className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse group-hover:bg-[#ff7043] transition-colors"></span>
+              <span className="text-[#a4a090] group-hover:text-[#ff8a65] font-mono text-xs transition-colors">Precision: 6D Noise Matrix</span>
+            </button>
           </div>
         </div>
       </header>
 
       {/* CORE CONTENT LAYOUT */}
-      <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0">
+      <main className="flex-1 w-full max-w-[1700px] mx-auto p-2.5 sm:p-3.5 grid grid-cols-1 lg:grid-cols-12 gap-3 min-h-0 lg:h-[calc(100vh-54px)] lg:overflow-hidden">
         
         {/* LEFT COLUMN: SELECTION, ROUTER INPUTS, SLIDERS & DIAGNOSTICS (7 COLS) */}
-        <section className="lg:col-span-7 flex flex-col gap-6 h-full overflow-y-auto pr-0 lg:pr-1">
+        <section className="lg:col-span-7 flex flex-col gap-2.5 h-full lg:overflow-y-auto pr-0 lg:pr-1.5 pb-4">
           
           {/* DIMENSION SELECTOR & LIST */}
-          <div className="bg-[#0c0808] border border-[#1c1212] rounded-xl p-4 sm:p-5">
-            <div className="bg-[#110c0c] border border-[#221313] p-3 rounded-lg mb-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <label className="text-[10px] text-[#ff7043] font-mono uppercase tracking-wider font-bold">
+          <div className="bg-[#0c0808] border border-[#1c1212] rounded-xl p-2.5 sm:p-3">
+            <div className="bg-[#110c0c] border border-[#221313] p-2 rounded-lg mb-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <label className="text-xs text-[#ff7043] font-mono uppercase tracking-wider font-bold">
                   Active Worldgen Dimension
                 </label>
-                <select
-                  value={selectedDimensionId}
-                  onChange={(e) => setSelectedDimensionId(e.target.value)}
-                  className="bg-[#050303] border border-[#421712] rounded px-3 py-1.5 text-[#ffab91] text-xs font-mono focus:outline-none focus:border-[#ff7043] cursor-pointer sm:w-72"
-                >
-                  <optgroup label="Backwoods Mod Dimensions" className="text-gray-400 bg-[#0c0808]">
-                    <option value="the_grain" className="text-white bg-[#050303]">The Grain (6 Biomes)</option>
-                    <option value="the_petrified_weald" className="text-white bg-[#050303]">The Petrified Weald (5 Biomes)</option>
-                    <option value="backwoods" className="text-white bg-[#050303]">The Backwoods (3 Biomes)</option>
-                    <option value="the_familiar" className="text-white bg-[#050303]">The Familiar (8 Biomes)</option>
-                    <option value="rotting" className="text-white bg-[#050303]">Rotting (1 Biome)</option>
-                    <option value="the_still" className="text-white bg-[#050303]">The Still (1 Biome)</option>
-                    <option value="the_sub_strata" className="text-white bg-[#050303]">The Sub Strata (1 Biome)</option>
-                    <option value="loss" className="text-white bg-[#050303]">Loss (1 Biome)</option>
-                  </optgroup>
-                  <optgroup label="Vanilla Minecraft Reference" className="text-gray-400 bg-[#0c0808]">
-                    <option value="overworld" className="text-white bg-[#050303]">Overworld (53 Biomes)</option>
-                    <option value="nether" className="text-white bg-[#050303]">Nether (5 Biomes)</option>
-                  </optgroup>
-                  <optgroup label="Sandbox Arena" className="text-gray-400 bg-[#0c0808]">
-                    <option value="custom_sandbox" className="text-white bg-[#050303]">Custom Sandbox ({(dimensionBiomes["custom_sandbox"] || []).length} Biomes)</option>
-                  </optgroup>
-                </select>
+                {/* THEME REMINDER: Dropdowns must use #0a0505 background with #521c16 borders and #ff7043 focus/ember accents */}
+                <div className="relative sm:w-72">
+                  <select
+                    value={selectedDimensionId}
+                    onChange={(e) => setSelectedDimensionId(e.target.value)}
+                    className="w-full appearance-none bg-[#0a0505] hover:bg-[#120a0a] border border-[#521c16] hover:border-[#ff7043]/60 focus:border-[#ff7043] focus:ring-1 focus:ring-[#ff7043] rounded-lg pl-3 pr-9 py-1.5 text-[#ffab91] text-xs font-mono tracking-wide cursor-pointer transition-colors shadow-sm focus:outline-none"
+                  >
+                    <optgroup label="── Backwoods Mod Dimensions ──" className="text-[#ff7043] font-bold bg-[#0c0808]">
+                      <option value="the_grain" className="text-[#e0d8cf] bg-[#0c0808] py-1">The Grain (6 Biomes)</option>
+                      <option value="the_petrified_weald" className="text-[#e0d8cf] bg-[#0c0808] py-1">The Petrified Weald (5 Biomes)</option>
+                      <option value="backwoods" className="text-[#e0d8cf] bg-[#0c0808] py-1">The Backwoods (3 Biomes)</option>
+                      <option value="the_familiar" className="text-[#e0d8cf] bg-[#0c0808] py-1">The Familiar (8 Biomes)</option>
+                      <option value="rotting" className="text-[#e0d8cf] bg-[#0c0808] py-1">Rotting (1 Biome)</option>
+                      <option value="the_still" className="text-[#e0d8cf] bg-[#0c0808] py-1">The Still (1 Biome)</option>
+                      <option value="the_sub_strata" className="text-[#e0d8cf] bg-[#0c0808] py-1">The Sub Strata (1 Biome)</option>
+                      <option value="loss" className="text-[#e0d8cf] bg-[#0c0808] py-1">Loss (1 Biome)</option>
+                    </optgroup>
+                    <optgroup label="── Vanilla Minecraft Reference ──" className="text-[#4db6ac] font-bold bg-[#0c0808]">
+                      <option value="overworld" className="text-[#e0d8cf] bg-[#0c0808] py-1">Overworld (53 Biomes)</option>
+                      <option value="nether" className="text-[#e0d8cf] bg-[#0c0808] py-1">Nether (5 Biomes)</option>
+                    </optgroup>
+                    <optgroup label="── Sandbox Arena ──" className="text-[#ffb74d] font-bold bg-[#0c0808]">
+                      <option value="custom_sandbox" className="text-[#e0d8cf] bg-[#0c0808] py-1">Custom Sandbox ({(dimensionBiomes["custom_sandbox"] || []).length} Biomes)</option>
+                    </optgroup>
+                  </select>
+                  <ChevronDown className="w-3.5 h-3.5 text-[#ff7043] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none transition-transform" />
+                </div>
               </div>
             </div>
 
-            {selectedDimension && (
-              <div className="bg-[#110a0a] border border-[#301614] p-3 rounded-lg mb-4 text-xs">
-                <p className="text-[#a4a090] leading-relaxed mb-2.5">
-                  {selectedDimension.description}
-                </p>
-                <div className="grid grid-cols-2 gap-2 text-[11px] font-mono border-t border-[#1f1313] pt-2">
-                  <div className="bg-[#070505] p-2 rounded border border-[#1c1212] flex items-center justify-between">
-                    <span className="text-[#70685c]">Sea Level:</span>
-                    <span className="text-[#ffab91] font-bold">
-                      {selectedDimension.seaLevel !== undefined ? selectedDimension.seaLevel : "N/A"}
-                    </span>
-                  </div>
-                  <div className="bg-[#070505] p-2 rounded border border-[#1c1212] flex items-center justify-between">
-                    <span className="text-[#70685c]">Default Block:</span>
-                    <span className="text-[#4db6ac] font-bold truncate max-w-[120px]" title={selectedDimension.defaultBlock || "stone"}>
-                      {selectedDimension.defaultBlock || "stone"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
 
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <h2 className="text-sm font-semibold tracking-wider uppercase text-white flex items-center gap-2">
+            <div className="flex items-center justify-between gap-3 mb-2.5">
+              <h2 className="text-sm font-bold tracking-wider uppercase text-white flex items-center gap-2">
                 <Sliders className="h-4 w-4 text-[#ff7043]" />
                 Registered Biomes Directory
               </h2>
               {selectedDimensionId === "custom_sandbox" && (
                 <div className="flex gap-2">
+                  {/* THEME REMINDER: Interactive buttons must use solid ember or emerald styling with #1c1212 borders */}
                   <button 
                     onClick={handleAddCustomBiome}
-                    className="text-[11px] text-white hover:bg-[#203a20] transition flex items-center gap-1.5 bg-[#142914] border border-[#235e23] px-2.5 py-1.5 rounded cursor-pointer font-bold font-mono"
+                    className="text-xs text-white hover:bg-[#203a20] transition flex items-center gap-1.5 bg-[#142914] border border-[#235e23] px-2.5 py-1 rounded cursor-pointer font-bold font-mono"
                   >
                     <Plus className="h-3 w-3 text-[#4db6ac]" />
                     Add Biome
                   </button>
                   <button 
                     onClick={handleRestoreDimensionDefaults}
-                    className="text-[11px] text-red-400 hover:bg-red-950/20 transition flex items-center gap-1 bg-[#1a0c0c] border border-[#5c1a1a] px-2.5 py-1.5 rounded cursor-pointer font-bold font-mono"
+                    className="text-xs text-red-400 hover:bg-red-950/20 transition flex items-center gap-1 bg-[#1a0c0c] border border-[#5c1a1a] px-2.5 py-1 rounded cursor-pointer font-bold font-mono"
                     title="Restore default biomes and settings for this dimension"
                   >
                     <RefreshCw className="h-3 w-3 text-red-500" />
@@ -1329,7 +1427,7 @@ export default function App() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-52 overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
               {biomes.map(b => {
                 const isSelected = b.id === selectedBiomeId;
                 const rarityInfo = biomeRarities.find(r => r.id === b.id);
@@ -1338,7 +1436,7 @@ export default function App() {
                   <div
                     key={b.id}
                     onClick={() => setSelectedBiomeId(b.id)}
-                    className={`p-2.5 rounded-lg text-left border transition flex flex-col justify-between cursor-pointer ${
+                    className={`p-2 rounded-lg text-left border transition flex flex-col justify-between cursor-pointer ${
                       isSelected 
                         ? "bg-[#221010] border-[#ff7043] text-white shadow-md shadow-[#ff7043]/5" 
                         : "bg-[#0d0909] border-[#1f1313] hover:border-[#3d2727] text-[#a4a090]"
@@ -1381,7 +1479,7 @@ export default function App() {
                         </button>
                       )}
                     </div>
-                    <div className="text-[9px] text-[#8c8779] flex items-center justify-between mt-1 font-mono">
+                    <div className="text-[10px] text-[#8c8779] flex items-center justify-between mt-1 font-mono">
                       <span>Occurence:</span>
                       <span className={`font-semibold ${rarityInfo?.colorClass}`}>
                         {rarityInfo ? rarityInfo.spacePercent.toFixed(3) : "0"}%
@@ -1395,20 +1493,20 @@ export default function App() {
 
           {/* BIOME CONFIGURATION PLACEMENT POINTS */}
           {selectedBiome && (
-            <div className="bg-[#0c0808] border border-[#1c1212] rounded-xl p-4 sm:p-5 flex flex-col gap-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#1c1212] pb-3 gap-2">
+            <div className="bg-[#0c0808] border border-[#1c1212] rounded-xl p-2.5 sm:p-3 flex flex-col gap-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#1c1212] pb-2 gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: selectedBiome.color }} />
+                  <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: selectedBiome.color }} />
                   <div>
                     <h3 className="text-sm font-bold text-white">{selectedBiome.name} Placement Regions</h3>
-                    <p className="text-[11px] text-[#8c8779] font-mono">This biome generates in {selectedBiome.points.length} distinct multi-noise region{selectedBiome.points.length > 1 ? "s" : ""}</p>
+                    <p className="text-xs text-[#8c8779] font-mono">This biome generates in {selectedBiome.points.length} distinct multi-noise region{selectedBiome.points.length > 1 ? "s" : ""}</p>
                   </div>
                 </div>
 
                 {selectedDimensionId === "custom_sandbox" && (
                   <button
                     onClick={handleAddPointToSelectedBiome}
-                    className="text-[10px] text-emerald-400 hover:bg-[#203a20] transition bg-[#142914] border border-[#235e23] px-2 py-1 rounded font-mono cursor-pointer"
+                    className="text-xs text-emerald-400 hover:bg-[#203a20] transition bg-[#142914] border border-[#235e23] px-2.5 py-1 rounded font-mono cursor-pointer font-bold shrink-0"
                   >
                     + Add Region
                   </button>
@@ -1416,21 +1514,21 @@ export default function App() {
               </div>
 
               {/* Point Tabs */}
-              <div className="flex flex-wrap gap-1.5 border-b border-[#1f1313] pb-2">
+              <div className="flex flex-wrap gap-1.5 border-b border-[#1f1313] pb-1.5">
                 {selectedBiome.points.map((pt, idx) => {
                   const vol = calculatePointVolume(pt);
                   return (
                     <button
                       key={idx}
                       onClick={() => setSelectedPointIndex(idx)}
-                      className={`px-3 py-1.5 text-xs font-mono rounded-lg border transition cursor-pointer flex items-center gap-1.5 ${
+                      className={`px-2.5 py-1 text-xs font-mono rounded-lg border transition cursor-pointer flex items-center gap-1.5 ${
                         selectedPointIndex === idx
                           ? "bg-[#2c1512] text-white border-[#ff7043]"
                           : "bg-[#0d0909] text-[#8c8779] border-transparent hover:border-[#3a2222]"
                       }`}
                     >
                       Region #{idx + 1}
-                      <span className="text-[9px] bg-[#110c0c] px-1 py-0.5 rounded text-[#70685c]">
+                      <span className="text-[10px] bg-[#110c0c] px-1 py-0.5 rounded text-[#70685c]">
                         Vol: {vol.toFixed(4)}
                       </span>
                       {selectedDimensionId === "custom_sandbox" && selectedBiome.points.length > 1 && (
@@ -1439,7 +1537,7 @@ export default function App() {
                             e.stopPropagation();
                             handleDeletePointFromSelectedBiome(idx);
                           }}
-                          className="text-red-400 hover:text-red-300 ml-1 font-bold text-[10px]"
+                          className="text-red-400 hover:text-red-300 ml-1 font-bold text-xs"
                         >
                           ×
                         </span>
@@ -1450,154 +1548,136 @@ export default function App() {
               </div>
 
               {activePoint ? (
-                <div className="flex flex-col gap-4 mt-1">
+                <div className="flex flex-col gap-2 mt-0.5">
                   
-                  {/* Climate Range Presets (Moderate / Frequent / Default) */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-[#110c0c] border border-[#221313] p-3 rounded-xl gap-3">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-[#ff7043] animate-pulse shrink-0" />
-                      <div>
-                        <span className="text-[10px] font-mono text-[#ff7043] font-bold uppercase tracking-wider block">Climate Range Presets</span>
-                        <p className="text-[11px] text-[#8c8779] font-mono leading-none">Scale the dimensions of the active region</p>
+                  {/* Consolidated Generation Weight & Climate Scale Toolbar */}
+                  <div className="bg-[#110c0c] border border-[#221313] p-2 rounded-lg flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-mono text-[#4db6ac] font-bold uppercase tracking-wider">Weight:</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.0001"
+                          max="100.0"
+                          value={weightInputVal}
+                          onChange={(e) => setWeightInputVal(e.target.value)}
+                          onBlur={() => handleCommitWeight(selectedBiome, weightInputVal)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              handleCommitWeight(selectedBiome, weightInputVal);
+                            }
+                          }}
+                          className="w-14 bg-[#050303] border border-[#235e5e]/40 rounded px-1.5 py-0.5 text-white text-xs font-mono text-center focus:outline-none focus:border-[#4db6ac]"
+                        />
+                        <button
+                          onClick={() => handleResetBiomeToDefault(selectedBiome.id)}
+                          className="text-xs bg-rose-950/40 text-rose-300 hover:bg-rose-950/60 border border-rose-900/50 rounded px-1.5 py-0.5 font-mono cursor-pointer transition font-bold"
+                          title="Reset biome baseRarity and climate slider values to original defaults"
+                        >
+                          Reset ({getOriginalBaseRarity(selectedBiome.id).toFixed(2)})
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-mono text-[#ff7043] font-bold uppercase mr-1">Scale:</span>
+                        <button 
+                          onClick={() => handleApplyPreset("moderate")}
+                          className="px-2 py-0.5 rounded bg-[#ff7043] hover:bg-[#ff8a65] text-[#080808] font-bold text-xs font-mono transition cursor-pointer"
+                          title="Expands ranges of this region around its coordinate center to boost generation chance."
+                        >
+                          Moderate
+                        </button>
+                        <button 
+                          onClick={() => handleApplyPreset("frequent")}
+                          className="px-2 py-0.5 rounded bg-[#d84315] hover:bg-[#ff7043] text-white font-bold text-xs font-mono transition cursor-pointer"
+                          title="Significantly broadens range boundaries of this region to make it common."
+                        >
+                          Frequent
+                        </button>
+                        <button 
+                          onClick={() => handleApplyPreset("restored")}
+                          className="px-2 py-0.5 rounded bg-[#201414] border border-[#ff7043]/20 text-[#8c8779] hover:text-white text-xs font-mono transition cursor-pointer"
+                          title="Restores this biome to original mod repository settings."
+                        >
+                          Default
+                        </button>
                       </div>
                     </div>
-                    <div className="flex gap-1.5 self-end sm:self-auto">
+
+                    <div className="flex flex-wrap items-center gap-1 pt-1.5 border-t border-[#1a1111]">
+                      <span className="text-[10px] font-mono text-[#70685c] mr-1">Multipliers:</span>
                       <button 
-                        onClick={() => handleApplyPreset("moderate")}
-                        className="px-2.5 py-1 rounded bg-[#ff7043] hover:bg-[#ff8a65] text-[#080808] font-bold text-[10px] font-mono transition cursor-pointer"
-                        title="Expands ranges of this region around its coordinate center to boost generation chance."
+                        onClick={() => handleUpdateCustomBiomeBaseRarity(selectedBiome.id, 1.0, "common")} 
+                        className="px-1.5 py-0.5 bg-[#0d0909] border border-[#1f1313] hover:bg-[#1f1313] text-[#70685c] rounded text-xs cursor-pointer font-mono"
                       >
-                        Moderate
+                        Common (1.0)
                       </button>
                       <button 
-                        onClick={() => handleApplyPreset("frequent")}
-                        className="px-2.5 py-1 rounded bg-[#d84315] hover:bg-[#ff7043] text-white font-bold text-[10px] font-mono transition cursor-pointer"
-                        title="Significantly broadens range boundaries of this region to make it common."
+                        onClick={() => handleUpdateCustomBiomeBaseRarity(selectedBiome.id, 0.15, "rare")} 
+                        className="px-1.5 py-0.5 bg-[#0d0909] border border-[#1f1313] hover:bg-[#1f1313] text-[#70685c] rounded text-xs cursor-pointer font-mono"
                       >
-                        Frequent
+                        Rare (0.15)
                       </button>
                       <button 
-                        onClick={() => handleApplyPreset("restored")}
-                        className="px-2.5 py-1 rounded bg-[#201414] border border-[#ff7043]/15 text-[#8c8779] hover:text-white text-[10px] font-mono transition cursor-pointer"
-                        title="Restores this biome to original mod repository settings."
+                        onClick={() => {
+                          const orig = getOriginalBaseRarity(selectedBiome.id);
+                          handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity + orig * 1.0, "multiply", 2.0);
+                        }} 
+                        className="px-1.5 py-0.5 bg-[#4db6ac]/10 hover:bg-[#4db6ac]/20 border border-[#4db6ac]/25 text-[#4db6ac] rounded text-xs cursor-pointer font-mono font-semibold"
                       >
-                        Default
+                        +1.0x
                       </button>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-col gap-3">
-                    <div className="bg-[#110c0c] border border-[#221313] rounded-lg p-3 flex flex-col gap-2">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                        <span className="text-[10px] font-mono text-[#4db6ac] font-bold uppercase tracking-wider block">Biome Generation Weight (Base Rarity)</span>
-                        <div className="flex items-center gap-1.5 self-end sm:self-auto">
-                          <span className="text-[10px] text-[#70685c] font-mono">Current Weight:</span>                          <input
-                            type="number"
-                            step="0.01"
-                            min="0.0001"
-                            max="100.0"
-                            value={weightInputVal}
-                            onChange={(e) => setWeightInputVal(e.target.value)}
-                            onBlur={() => handleCommitWeight(selectedBiome, weightInputVal)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                handleCommitWeight(selectedBiome, weightInputVal);
-                              }
-                            }}
-                            className="w-16 bg-[#050303] border border-[#235e5e]/40 rounded px-1.5 py-0.5 text-white text-xs font-mono text-center focus:outline-none focus:border-[#4db6ac]"
-                          />
-                          <button
-                            onClick={() => handleResetBiomeToDefault(selectedBiome.id)}
-                            className="text-[10px] bg-rose-950/40 text-rose-300 hover:bg-rose-950/60 border border-rose-900/50 rounded px-2 py-0.5 font-mono cursor-pointer transition font-bold"
-                            title="Reset biome baseRarity and climate slider values to original defaults"
-                          >
-                            Reset ({getOriginalBaseRarity(selectedBiome.id).toFixed(2)})
-                          </button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2 mt-1">
-                        {/* Standard Absolute Level Presets */}
-                        <button 
-                          onClick={() => handleUpdateCustomBiomeBaseRarity(selectedBiome.id, 1.0, "common")} 
-                          className="px-2 py-1.5 bg-[#0d0909] border border-[#1f1313] hover:bg-[#1f1313] text-[#70685c] rounded text-[11px] cursor-pointer font-mono"
-                          title="Set weight to standard common level (1.0) and expand climate ranges"
-                        >
-                          Common (1.0)
-                        </button>
-                        <button 
-                          onClick={() => handleUpdateCustomBiomeBaseRarity(selectedBiome.id, 0.15, "rare")} 
-                          className="px-2 py-1.5 bg-[#0d0909] border border-[#1f1313] hover:bg-[#1f1313] text-[#70685c] rounded text-[11px] cursor-pointer font-mono"
-                          title="Set weight to standard rare level (0.15) and narrow climate ranges"
-                        >
-                          Rare (0.15)
-                        </button>
-                        {/* Additive presets (adds factor increments of original default rarity) */}
-                        <button 
-                          onClick={() => {
-                            const orig = getOriginalBaseRarity(selectedBiome.id);
-                            handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity + orig * 1.0, "multiply", 2.0);
-                          }} 
-                          className="px-2 py-1.5 bg-[#4db6ac]/10 hover:bg-[#4db6ac]/20 border border-[#4db6ac]/25 text-[#4db6ac] rounded text-[11px] cursor-pointer font-mono font-semibold"
-                          title="Add 100% of original default base rarity and widen climate ranges by 2.0x"
-                        >
-                          +1.0x (2x)
-                        </button>
-                        <button 
-                          onClick={() => {
-                            const orig = getOriginalBaseRarity(selectedBiome.id);
-                            handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity + orig * 0.5, "multiply", 1.5);
-                          }} 
-                          className="px-2 py-1.5 bg-[#4db6ac]/10 hover:bg-[#4db6ac]/20 border border-[#4db6ac]/25 text-[#4db6ac] rounded text-[11px] cursor-pointer font-mono font-semibold"
-                          title="Add 50% of original default base rarity and widen climate ranges by 1.5x"
-                        >
-                          +0.5x (1.5x)
-                        </button>
-                        <button 
-                          onClick={() => {
-                            const orig = getOriginalBaseRarity(selectedBiome.id);
-                            handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity - orig * 0.25, "multiply", 0.75);
-                          }} 
-                          className="px-2 py-1.5 bg-[#101a18] border border-[#1b3e39] hover:bg-[#1a2e2b] text-white rounded text-[11px] cursor-pointer font-mono font-semibold"
-                          title="Subtract 25% of original default base rarity and narrow climate ranges by 0.75x"
-                        >
-                          -0.25x (0.75x)
-                        </button>
-                        <button 
-                          onClick={() => {
-                            const orig = getOriginalBaseRarity(selectedBiome.id);
-                            handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity - orig * 0.5, "multiply", 0.5);
-                          }} 
-                          className="px-2 py-1.5 bg-[#101a18] border border-[#1b3e39] hover:bg-[#1a2e2b] text-white rounded text-[11px] cursor-pointer font-mono font-semibold"
-                          title="Subtract 50% of original default base rarity and narrow climate ranges by 0.5x"
-                        >
-                          -0.5x (0.5x)
-                        </button>
-                        <button 
-                          onClick={() => {
-                            const orig = getOriginalBaseRarity(selectedBiome.id);
-                            handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity + orig * 2.0, "multiply", 3.0);
-                          }} 
-                          className="px-2 py-1.5 bg-[#4db6ac]/15 hover:bg-[#4db6ac]/25 border border-[#4db6ac]/30 text-[#4db6ac] rounded text-[11px] cursor-pointer font-mono font-semibold"
-                          title="Add 200% of original default base rarity and widen climate ranges by 3.0x"
-                        >
-                          +2.0x (3x)
-                        </button>
-                        <button 
-                          onClick={() => {
-                            const orig = getOriginalBaseRarity(selectedBiome.id);
-                            handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity - orig * 0.75, "multiply", 0.25);
-                          }} 
-                          className="px-2 py-1.5 bg-[#101a18] border border-[#1b3e39] hover:bg-[#1a2e2b] text-white rounded text-[11px] cursor-pointer font-mono font-semibold"
-                          title="Subtract 75% of original default base rarity and narrow climate ranges by 0.25x"
-                        >
-                          -0.75x (0.25x)
-                        </button>
-                      </div>
+                      <button 
+                        onClick={() => {
+                          const orig = getOriginalBaseRarity(selectedBiome.id);
+                          handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity + orig * 0.5, "multiply", 1.5);
+                        }} 
+                        className="px-1.5 py-0.5 bg-[#4db6ac]/10 hover:bg-[#4db6ac]/20 border border-[#4db6ac]/25 text-[#4db6ac] rounded text-xs cursor-pointer font-mono font-semibold"
+                      >
+                        +0.5x
+                      </button>
+                      <button 
+                        onClick={() => {
+                          const orig = getOriginalBaseRarity(selectedBiome.id);
+                          handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity - orig * 0.25, "multiply", 0.75);
+                        }} 
+                        className="px-1.5 py-0.5 bg-[#101a18] border border-[#1b3e39] hover:bg-[#1a2e2b] text-white rounded text-xs cursor-pointer font-mono font-semibold"
+                      >
+                        -0.25x
+                      </button>
+                      <button 
+                        onClick={() => {
+                          const orig = getOriginalBaseRarity(selectedBiome.id);
+                          handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity - orig * 0.5, "multiply", 0.5);
+                        }} 
+                        className="px-1.5 py-0.5 bg-[#101a18] border border-[#1b3e39] hover:bg-[#1a2e2b] text-white rounded text-xs cursor-pointer font-mono font-semibold"
+                      >
+                        -0.5x
+                      </button>
+                      <button 
+                        onClick={() => {
+                          const orig = getOriginalBaseRarity(selectedBiome.id);
+                          handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity + orig * 2.0, "multiply", 3.0);
+                        }} 
+                        className="px-1.5 py-0.5 bg-[#4db6ac]/15 hover:bg-[#4db6ac]/25 border border-[#4db6ac]/30 text-[#4db6ac] rounded text-xs cursor-pointer font-mono font-semibold"
+                      >
+                        +2.0x
+                      </button>
+                      <button 
+                        onClick={() => {
+                          const orig = getOriginalBaseRarity(selectedBiome.id);
+                          handleUpdateCustomBiomeBaseRarity(selectedBiome.id, selectedBiome.baseRarity - orig * 0.75, "multiply", 0.25);
+                        }} 
+                        className="px-1.5 py-0.5 bg-[#101a18] border border-[#1b3e39] hover:bg-[#1a2e2b] text-white rounded text-xs cursor-pointer font-mono font-semibold"
+                      >
+                        -0.75x
+                      </button>
                     </div>
                   </div>
 
-                  {/* Sliders Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Compact, Non-Glowing, Non-Overlapping Sliders Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {([
                       { key: "temp", name: "Temperature", colorClass: "text-[#ff8a65]" },
                       { key: "hum", name: "Humidity / Veg", colorClass: "text-[#4db6ac]" },
@@ -1608,22 +1688,23 @@ export default function App() {
                     ] as const).map(dim => {
                       const range = activePoint[dim.key];
                       return (
-                        <div key={dim.key} className="bg-[#0d0909] border border-[#1f1313] p-3 rounded-lg font-mono">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className={`text-[11px] font-bold uppercase ${dim.colorClass}`}>{dim.name}</span>
-                            <span className="text-[10px] text-[#70685c]">
+                        <div key={dim.key} className="bg-[#0d0909] border border-[#1f1313] p-2 rounded-lg font-mono flex flex-col gap-1 min-w-0">
+                          {/* Parameter Header: Name and range range display */}
+                          <div className="flex items-center justify-between gap-1 flex-wrap">
+                            <span className={`text-xs font-bold uppercase tracking-tight truncate ${dim.colorClass}`}>{dim.name}</span>
+                            <span className="text-xs text-[#8c8779] whitespace-nowrap">
                               [{range.min.toFixed(2)} to {range.max.toFixed(2)}]
                             </span>
                           </div>
 
-                          <div className="flex flex-col gap-2 text-xs">
+                          <div className="flex flex-col gap-1 text-xs">
                             {/* Min bound */}
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="text-[10px] text-[#70685c] w-8">Min:</span>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-xs text-[#8c8779] font-bold w-8 shrink-0">Min:</span>
                               <PreciseNumberInput
                                 value={range.min}
                                 onChange={(val) => handlePointRangeChange(selectedBiomeId, selectedPointIndex, dim.key, "min", val)}
-                                className="w-14 bg-[#050303] border border-[#3e1b16] rounded px-1 py-0.5 text-white text-center text-[11px]"
+                                className="w-14 bg-[#050303] border border-[#3e1b16] rounded px-1 py-0.5 text-white text-center text-xs shrink-0 font-mono focus:border-[#ff7043] focus:outline-none"
                               />
                               <input
                                 type="range"
@@ -1632,16 +1713,16 @@ export default function App() {
                                 step="0.05"
                                 value={range.min}
                                 onChange={(e) => handlePointRangeChange(selectedBiomeId, selectedPointIndex, dim.key, "min", parseFloat(e.target.value))}
-                                className="flex-1 accent-[#ff7043] h-1 cursor-pointer"
+                                className="flex-1 min-w-0"
                               />
                             </div>
                             {/* Max bound */}
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="text-[10px] text-[#70685c] w-8">Max:</span>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-xs text-[#8c8779] font-bold w-8 shrink-0">Max:</span>
                               <PreciseNumberInput
                                 value={range.max}
                                 onChange={(val) => handlePointRangeChange(selectedBiomeId, selectedPointIndex, dim.key, "max", val)}
-                                className="w-14 bg-[#050303] border border-[#3e1b16] rounded px-1 py-0.5 text-white text-center text-[11px]"
+                                className="w-14 bg-[#050303] border border-[#3e1b16] rounded px-1 py-0.5 text-white text-center text-xs shrink-0 font-mono focus:border-[#ff7043] focus:outline-none"
                               />
                               <input
                                 type="range"
@@ -1650,7 +1731,7 @@ export default function App() {
                                 step="0.05"
                                 value={range.max}
                                 onChange={(e) => handlePointRangeChange(selectedBiomeId, selectedPointIndex, dim.key, "max", parseFloat(e.target.value))}
-                                className="flex-1 accent-[#ff7043] h-1 cursor-pointer"
+                                className="flex-1 min-w-0"
                               />
                             </div>
                           </div>
@@ -1659,118 +1740,136 @@ export default function App() {
                     })}
                   </div>
 
-                  {/* Climate Presets Section */}
-                  <div className="bg-[#110c0c] border border-[#221313] p-3 rounded-lg mt-2">
-                    <span className="text-[10px] font-mono text-[#ff7043] font-bold uppercase tracking-wider block mb-2">
-                      Quick Climate Presets (Applies to all 6 sliders)
-                    </span>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {[
-                        { name: "Plains-like", desc: "Flat, temperate, moderately dry", icon: "🌱", values: { temp: { min: -0.15, max: 0.15 }, hum: { min: -0.1, max: 0.1 }, cont: { min: 0.1, max: 0.4 }, eros: { min: 0.2, max: 0.6 }, weird: { min: -0.2, max: 0.2 }, depth: { min: 0.0, max: 0.2 } } },
-                        { name: "Mountain Peaks", desc: "Cold, dry, rugged slopes", icon: "🏔️", values: { temp: { min: -0.5, max: 0.0 }, hum: { min: -0.3, max: 0.3 }, cont: { min: 0.55, max: 1.0 }, eros: { min: -0.8, max: -0.4 }, weird: { min: 0.3, max: 0.8 }, depth: { min: 0.5, max: 1.5 } } },
-                        { name: "Desert Dunes", desc: "Hot, arid sand dunes", icon: "🏜️", values: { temp: { min: 0.8, max: 1.5 }, hum: { min: -1.0, max: -0.6 }, cont: { min: 0.2, max: 0.6 }, eros: { min: -0.4, max: 0.2 }, weird: { min: -0.5, max: 0.5 }, depth: { min: -0.1, max: 0.1 } } },
-                        { name: "Swampy Wet", desc: "Warm, extremely humid swamp", icon: "🐊", values: { temp: { min: 0.4, max: 0.8 }, hum: { min: 0.6, max: 1.0 }, cont: { min: -0.1, max: 0.2 }, eros: { min: 0.2, max: 0.6 }, weird: { min: -0.3, max: 0.1 }, depth: { min: -0.2, max: 0.0 } } },
-                        { name: "Deep Ocean", desc: "Wet, deep ocean floor", icon: "🌊", values: { temp: { min: -0.2, max: 0.5 }, hum: { min: -0.5, max: 0.5 }, cont: { min: -1.0, max: -0.25 }, eros: { min: -0.5, max: 0.5 }, weird: { min: -1.0, max: 1.0 }, depth: { min: -1.5, max: -0.8 } } },
-                        { name: "Underground Caves", desc: "Cool subterranean cave", icon: "🕳️", values: { temp: { min: -0.1, max: 0.1 }, hum: { min: -0.1, max: 0.1 }, cont: { min: 0.2, max: 1.0 }, eros: { min: -0.2, max: 0.2 }, weird: { min: 0.4, max: 1.0 }, depth: { min: -1.5, max: -1.0 } } }
-                      ].map(preset => (
-                        <button
-                          key={preset.name}
-                          type="button"
-                          onClick={() => handleApplyClimateTemplate(preset.values)}
-                          className="px-2 py-1.5 bg-[#0d0909] border border-[#221313] hover:border-[#ff7043] hover:bg-[#110c0c] rounded text-[11px] text-[#a4a090] text-left cursor-pointer transition flex flex-col gap-0.5"
-                          title={preset.desc}
-                        >
-                          <span className="font-bold text-white flex items-center gap-1">
-                            <span>{preset.icon}</span>
-                            <span>{preset.name}</span>
-                          </span>
-                          <span className="text-[9px] text-[#70685c] leading-tight truncate">{preset.desc}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* MCreator Clipboard Exporter Section */}
-                  <div className="bg-[#110c0c] border border-[#221313] p-3 rounded-lg mt-2">
-                    <div className="flex items-center justify-between border-b border-[#221313] pb-2 mb-2">
-                      <div className="flex items-center gap-1.5">
-                        <Terminal className="h-3.5 w-3.5 text-[#ff7043]" />
-                        <span className="text-[10px] font-mono text-[#ff7043] font-bold uppercase tracking-wider block">
-                          MCreator Parameter Exporter
-                        </span>
-                      </div>
+                  {/* Collapsible Utility Panels: Climate Presets & MCreator Exporter */}
+                  <div className="flex flex-col gap-2 mt-0.5">
+                    {/* Presets Accordion */}
+                    <div className="bg-[#110c0c] border border-[#221313] rounded-lg overflow-hidden">
                       <button
                         type="button"
-                        onClick={() => {
-                          const jsonStr = JSON.stringify({
-                            temperature: [activePoint.temp.min, activePoint.temp.max],
-                            humidity: [activePoint.hum.min, activePoint.hum.max],
-                            continentalness: [activePoint.cont.min, activePoint.cont.max],
-                            erosion: [activePoint.eros.min, activePoint.eros.max],
-                            weirdness: [activePoint.weird.min, activePoint.weird.max],
-                            depth: [activePoint.depth.min, activePoint.depth.max]
-                          }, null, 2);
-                          navigator.clipboard.writeText(jsonStr);
-                          setCopiedField("json");
-                          setTimeout(() => setCopiedField(null), 1500);
-                        }}
-                        className="text-[9px] bg-[#ff7043]/10 hover:bg-[#ff7043]/20 text-[#ff7043] border border-[#ff7043]/30 px-2 py-0.5 rounded font-mono font-semibold flex items-center gap-1 cursor-pointer transition"
+                        onClick={() => setShowClimatePresets(prev => !prev)}
+                        className="w-full px-3 py-1.5 flex items-center justify-between text-left hover:bg-[#170f0e] transition cursor-pointer"
                       >
-                        {copiedField === "json" ? "✓ Copied!" : "📋 Copy All as JSON"}
+                        <span className="text-xs font-mono text-[#ff7043] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <Sparkles className="h-3.5 w-3.5 text-[#ff7043]" />
+                          Quick Climate Presets (Applies to all 6 sliders)
+                        </span>
+                        <ChevronDown className={`w-3.5 h-3.5 text-[#ff7043] transition-transform ${showClimatePresets ? "rotate-180" : ""}`} />
                       </button>
+
+                      {showClimatePresets && (
+                        <div className="p-2.5 pt-0 border-t border-[#1f1313] mt-1.5">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {[
+                              { name: "Plains-like", desc: "Flat, temperate, moderately dry", tag: "Plains", values: { temp: { min: -0.15, max: 0.15 }, hum: { min: -0.1, max: 0.1 }, cont: { min: 0.1, max: 0.4 }, eros: { min: 0.2, max: 0.6 }, weird: { min: -0.2, max: 0.2 }, depth: { min: 0.0, max: 0.2 } } },
+                              { name: "Mountain Peaks", desc: "Cold, dry, rugged slopes", tag: "Peaks", values: { temp: { min: -0.5, max: 0.0 }, hum: { min: -0.3, max: 0.3 }, cont: { min: 0.55, max: 1.0 }, eros: { min: -0.8, max: -0.4 }, weird: { min: 0.3, max: 0.8 }, depth: { min: 0.5, max: 1.5 } } },
+                              { name: "Desert Dunes", desc: "Hot, arid sand dunes", tag: "Desert", values: { temp: { min: 0.8, max: 1.5 }, hum: { min: -1.0, max: -0.6 }, cont: { min: 0.2, max: 0.6 }, eros: { min: -0.4, max: 0.2 }, weird: { min: -0.5, max: 0.5 }, depth: { min: -0.1, max: 0.1 } } },
+                              { name: "Swampy Wet", desc: "Warm, extremely humid swamp", tag: "Swamp", values: { temp: { min: 0.4, max: 0.8 }, hum: { min: 0.6, max: 1.0 }, cont: { min: -0.1, max: 0.2 }, eros: { min: 0.2, max: 0.6 }, weird: { min: -0.3, max: 0.1 }, depth: { min: -0.2, max: 0.0 } } },
+                              { name: "Deep Ocean", desc: "Wet, deep ocean floor", tag: "Ocean", values: { temp: { min: -0.2, max: 0.5 }, hum: { min: -0.5, max: 0.5 }, cont: { min: -1.0, max: -0.25 }, eros: { min: -0.5, max: 0.5 }, weird: { min: -1.0, max: 1.0 }, depth: { min: -1.5, max: -0.8 } } },
+                              { name: "Underground Caves", desc: "Cool subterranean cave", tag: "Caves", values: { temp: { min: -0.1, max: 0.1 }, hum: { min: -0.1, max: 0.1 }, cont: { min: 0.2, max: 1.0 }, eros: { min: -0.2, max: 0.2 }, weird: { min: 0.4, max: 1.0 }, depth: { min: -1.5, max: -1.0 } } }
+                            ].map(preset => (
+                              <button
+                                key={preset.name}
+                                type="button"
+                                onClick={() => handleApplyClimateTemplate(preset.values)}
+                                className="px-2 py-1.5 bg-[#0d0909] border border-[#221313] hover:border-[#ff7043] hover:bg-[#110c0c] rounded text-xs text-[#a4a090] text-left cursor-pointer transition flex flex-col gap-0.5"
+                                title={preset.desc}
+                              >
+                                <span className="font-bold text-white flex items-center justify-between">
+                                  <span>{preset.name}</span>
+                                  <span className="text-[10px] font-mono text-[#ff7043] bg-[#221010] px-1 rounded">{preset.tag}</span>
+                                </span>
+                                <span className="text-[10px] text-[#70685c] leading-tight truncate">{preset.desc}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    <p className="text-[9px] text-[#70685c] leading-relaxed mb-2.5">
-                      Click the values below to instantly copy them for fast pasting into MCreator biome editor min/max fields:
-                    </p>
+                    {/* Exporter Accordion */}
+                    <div className="bg-[#110c0c] border border-[#221313] rounded-lg overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setShowExporter(prev => !prev)}
+                        className="w-full px-3 py-1.5 flex items-center justify-between text-left hover:bg-[#170f0e] transition cursor-pointer"
+                      >
+                        <span className="text-xs font-mono text-[#ff7043] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <Terminal className="h-3.5 w-3.5 text-[#ff7043]" />
+                          MCreator Parameter Exporter
+                        </span>
+                        <ChevronDown className={`w-3.5 h-3.5 text-[#ff7043] transition-transform ${showExporter ? "rotate-180" : ""}`} />
+                      </button>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono">
-                      {[
-                        { label: "Temperature", min: activePoint.temp.min, max: activePoint.temp.max, key: "temp" },
-                        { label: "Humidity / Veg", min: activePoint.hum.min, max: activePoint.hum.max, key: "hum" },
-                        { label: "Continentalness", min: activePoint.cont.min, max: activePoint.cont.max, key: "cont" },
-                        { label: "Erosion", min: activePoint.eros.min, max: activePoint.eros.max, key: "eros" },
-                        { label: "Weirdness", min: activePoint.weird.min, max: activePoint.weird.max, key: "weird" },
-                        { label: "Depth", min: activePoint.depth.min, max: activePoint.depth.max, key: "depth" }
-                      ].map(field => {
-                        return (
-                          <div key={field.label} className="bg-[#050303] border border-[#1f1212] p-2 rounded flex flex-col gap-1.5 justify-between">
-                            <span className="text-[#a4a090] text-[10px] font-bold">{field.label}:</span>
-                            <div className="flex items-center gap-1.5 justify-between">
-                              {/* Min button */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(field.min.toFixed(4));
-                                  setCopiedField(`${field.key}-min`);
-                                  setTimeout(() => setCopiedField(null), 1000);
-                                }}
-                                className="flex-1 px-1.5 py-1 bg-[#100b0b] border border-[#ff7043]/20 hover:border-[#ff7043]/50 text-white rounded text-center text-[10px] transition cursor-pointer font-bold"
-                              >
-                                {copiedField === `${field.key}-min` ? "✓ Copied!" : `Min: ${field.min.toFixed(4)}`}
-                              </button>
-                              {/* Max button */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(field.max.toFixed(4));
-                                  setCopiedField(`${field.key}-max`);
-                                  setTimeout(() => setCopiedField(null), 1000);
-                                }}
-                                className="flex-1 px-1.5 py-1 bg-[#100b0b] border border-[#ff7043]/20 hover:border-[#ff7043]/50 text-white rounded text-center text-[10px] transition cursor-pointer font-bold"
-                              >
-                                {copiedField === `${field.key}-max` ? "✓ Copied!" : `Max: ${field.max.toFixed(4)}`}
-                              </button>
-                            </div>
+                      {showExporter && (
+                        <div className="p-2.5 pt-0 border-t border-[#1f1313] mt-1.5">
+                          <div className="flex items-center justify-between mb-2 gap-2">
+                            <p className="text-[10px] text-[#8c8779] leading-relaxed">
+                              Click values below to copy for MCreator min/max fields:
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const jsonStr = JSON.stringify({
+                                  temperature: [activePoint.temp.min, activePoint.temp.max],
+                                  humidity: [activePoint.hum.min, activePoint.hum.max],
+                                  continentalness: [activePoint.cont.min, activePoint.cont.max],
+                                  erosion: [activePoint.eros.min, activePoint.eros.max],
+                                  weirdness: [activePoint.weird.min, activePoint.weird.max],
+                                  depth: [activePoint.depth.min, activePoint.depth.max]
+                                }, null, 2);
+                                navigator.clipboard.writeText(jsonStr);
+                                setCopiedField("json");
+                                setTimeout(() => setCopiedField(null), 1500);
+                              }}
+                              className="text-xs bg-[#ff7043]/10 hover:bg-[#ff7043]/20 text-[#ff7043] border border-[#ff7043]/30 px-2 py-0.5 rounded font-mono font-semibold flex items-center gap-1 cursor-pointer transition shrink-0"
+                            >
+                              <FileText className="h-3 w-3" />
+                              {copiedField === "json" ? "Copied!" : "Copy All JSON"}
+                            </button>
                           </div>
-                        );
-                      })}
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
+                            {[
+                              { label: "Temperature", min: activePoint.temp.min, max: activePoint.temp.max, key: "temp" },
+                              { label: "Humidity / Veg", min: activePoint.hum.min, max: activePoint.hum.max, key: "hum" },
+                              { label: "Continentalness", min: activePoint.cont.min, max: activePoint.cont.max, key: "cont" },
+                              { label: "Erosion", min: activePoint.eros.min, max: activePoint.eros.max, key: "eros" },
+                              { label: "Weirdness", min: activePoint.weird.min, max: activePoint.weird.max, key: "weird" },
+                              { label: "Depth", min: activePoint.depth.min, max: activePoint.depth.max, key: "depth" }
+                            ].map(field => (
+                              <div key={field.label} className="bg-[#050303] border border-[#1f1212] p-1.5 rounded flex flex-col gap-1 justify-between">
+                                <span className="text-[#a4a090] text-xs font-bold">{field.label}:</span>
+                                <div className="flex items-center gap-1.5 justify-between">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(field.min.toFixed(4));
+                                      setCopiedField(`${field.key}-min`);
+                                      setTimeout(() => setCopiedField(null), 1000);
+                                    }}
+                                    className="flex-1 px-1.5 py-0.5 bg-[#100b0b] border border-[#ff7043]/20 hover:border-[#ff7043]/50 text-white rounded text-center text-xs transition cursor-pointer font-bold truncate"
+                                  >
+                                    {copiedField === `${field.key}-min` ? "Copied!" : `Min: ${field.min.toFixed(4)}`}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(field.max.toFixed(4));
+                                      setCopiedField(`${field.key}-max`);
+                                      setTimeout(() => setCopiedField(null), 1000);
+                                    }}
+                                    className="flex-1 px-1.5 py-0.5 bg-[#100b0b] border border-[#ff7043]/20 hover:border-[#ff7043]/50 text-white rounded text-center text-xs transition cursor-pointer font-bold truncate"
+                                  >
+                                    {copiedField === `${field.key}-max` ? "Copied!" : `Max: ${field.max.toFixed(4)}`}
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-
-                  <p className="text-[10px] text-[#70685c] italic leading-relaxed mt-3">
-                    <span>* Slide the climate ranges or adjust the generation weights to reshape your biomes. Updates will instantly refresh the 6D slice maps and 2D world visualizer. Use the "Restore Defaults" button in the biomes directory to reset a dimension's configurations anytime.</span>
-                  </p>
 
                 </div>
               ) : null}
@@ -1782,25 +1881,25 @@ export default function App() {
         </section>
 
         {/* RIGHT COLUMN: VISUAL MAP & MATCHING RESULTS (5 COLS) */}
-        <section className="lg:col-span-5 flex flex-col gap-6 h-full overflow-y-auto pr-0 lg:pr-1">
+        <section className="lg:col-span-5 flex flex-col gap-2.5 h-full lg:overflow-y-auto pr-0 lg:pr-1 pb-4">
           
           {/* 2D PROJECTION CANVAS */}
-          <div className="bg-[#0c0808] border border-[#1c1212] rounded-xl p-4 sm:p-5 flex flex-col gap-4">
+          <div className="bg-[#0c0808] border border-[#1c1212] rounded-xl p-2.5 sm:p-3 flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold tracking-wider uppercase text-white flex items-center gap-2">
-                <Map className="h-4 w-4 text-[#ff7043]" />
+              <h2 className="text-sm font-bold tracking-wider uppercase text-white flex items-center gap-1.5">
+                <MapIcon className="h-4 w-4 text-[#ff7043]" />
                 Interactive Visual Map
               </h2>
               <div className="flex bg-[#110c0c] p-0.5 rounded border border-[#221313] text-xs">
                 <button
                   onClick={() => setMapMode("slice")}
-                  className={`px-2.5 py-1 text-center text-[11px] font-mono rounded font-medium transition cursor-pointer ${mapMode === "slice" ? "bg-[#ff7043] text-[#080808]" : "text-[#8c8779] hover:text-white"}`}
+                  className={`px-2 py-0.5 text-center text-xs font-mono rounded font-medium transition cursor-pointer ${mapMode === "slice" ? "bg-[#ff7043] text-[#080808] font-bold" : "text-[#8c8779] hover:text-white"}`}
                 >
                   6D Slice
                 </button>
                 <button
                   onClick={() => setMapMode("chunkbase")}
-                  className={`px-2.5 py-1 text-center text-[11px] font-mono rounded font-medium transition cursor-pointer flex items-center gap-1 ${mapMode === "chunkbase" ? "bg-[#ff7043] text-[#080808]" : "text-[#8c8779] hover:text-white"}`}
+                  className={`px-2 py-0.5 text-center text-xs font-mono rounded font-medium transition cursor-pointer flex items-center gap-1 ${mapMode === "chunkbase" ? "bg-[#ff7043] text-[#080808] font-bold" : "text-[#8c8779] hover:text-white"}`}
                 >
                   <Globe className="h-3 w-3" />
                   World
@@ -1808,187 +1907,194 @@ export default function App() {
               </div>
             </div>
 
-            {/* SEED INPUT BLOCK */}
-            <div className="bg-[#110c0c] border border-[#221313] p-3 rounded-lg text-xs">
-              <div className="flex items-center justify-between mb-1.5 font-mono">
-                <label className="text-[10px] text-[#ff7043] font-bold uppercase tracking-wider block">
-                  World Generator Seed
-                </label>
-                {seedInput.trim() !== simulationSeed.toString() && (
-                  <span className="text-[9px] text-[#8c8779]" title="Hashed signed 32-bit seed">
-                    Hash: {simulationSeed}
-                  </span>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={seedInput}
-                  onChange={(e) => setSeedInput(e.target.value)}
-                  placeholder="e.g. 42 or biome_rules"
-                  className="flex-1 bg-[#050303] border border-[#421b16] rounded px-3 py-1 text-white text-xs font-mono focus:border-[#ff7043] focus:outline-none placeholder-[#4a2e2a]"
-                />
-                <button
-                  onClick={() => setSeedInput((Math.floor(Math.random() * 999999999) + 1).toString())}
-                  className="px-2.5 py-1 bg-[#1a0f0e] border border-[#521c16] text-[#ff7043] rounded text-xs hover:border-[#ff7043]/50 transition font-mono"
-                >
-                  Random
-                </button>
-              </div>
-            </div>
-
-            {/* ALGORITHM TOGGLE BLOCK */}
-            <div className="bg-[#110c0c] border border-[#221313] p-3 rounded-lg text-xs flex flex-col gap-2">
-              <div className="flex items-center justify-between font-mono">
-                <label className="text-[10px] text-[#ff7043] font-bold uppercase tracking-wider block">
-                  Biome Matching Algorithm
-                </label>
-                <div className="group relative">
-                  <span className="text-[10px] text-[#4db6ac] border border-[#4db6ac]/30 hover:border-[#4db6ac] rounded px-1.5 py-0.5 bg-[#4db6ac]/5 cursor-help transition select-none">
-                    ℹ️ Help Note
-                  </span>
-                  <div className="absolute right-0 bottom-full mb-2 w-64 p-2.5 bg-[#0a0606] border border-[#235e5e]/80 text-[#a4a090] text-[10px] rounded shadow-xl leading-relaxed hidden group-hover:block z-50">
-                    <strong className="text-white">Clamped Distance (Accurate)</strong> matches how Minecraft's actual nearest-point biome resolution behaves, measuring only out-of-range boundaries. <strong className="text-white">Midpoint Distance (Experimental)</strong> is a simplified Euclidean approximation to midpoints, kept for comparison.
-                  </div>
+            {/* SEED & ALGORITHM COMPACT GRID */}
+            {/* CRITICAL THEME & LAYOUT REMINDER: 
+                NEVER ALLOW BUTTONS TO OVERFLOW OR OVERLAP CONTAINER BORDERS!
+                Always enforce min-w-0 on grid cells, min-w-0 w-0 flex-1 on text inputs,
+                and shrink-0 whitespace-nowrap on action buttons. 
+            */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              {/* Seed */}
+              <div className="bg-[#110c0c] border border-[#221313] p-1.5 rounded-lg flex flex-col justify-between gap-1 min-w-0 overflow-hidden">
+                <div className="flex items-center justify-between font-mono min-w-0">
+                  <label className="text-xs text-[#ff7043] font-bold uppercase tracking-wider block truncate">
+                    Seed
+                  </label>
+                  {seedInput.trim() !== simulationSeed.toString() && (
+                    <span className="text-[10px] text-[#8c8779] shrink-0" title="Hashed signed 32-bit seed">
+                      #{simulationSeed}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 min-w-0 w-full">
+                  <input
+                    type="text"
+                    value={seedInput}
+                    onChange={(e) => setSeedInput(e.target.value)}
+                    placeholder="e.g. 42"
+                    className="min-w-0 flex-1 w-0 bg-[#050303] border border-[#421b16] rounded px-2 py-0.5 text-white text-xs font-mono focus:border-[#ff7043] focus:outline-none placeholder-[#4a2e2a]"
+                  />
+                  <button
+                    onClick={() => setSeedInput((Math.floor(Math.random() * 999999999) + 1).toString())}
+                    className="px-2 py-0.5 bg-[#1a0f0e] border border-[#521c16] text-[#ff7043] rounded text-xs hover:border-[#ff7043]/50 transition font-mono cursor-pointer shrink-0 font-bold whitespace-nowrap"
+                  >
+                    Random
+                  </button>
                 </div>
               </div>
-              
-              <div className="flex bg-[#050303] p-0.5 rounded border border-[#221313] text-xs font-mono">
-                <button
-                  type="button"
-                  onClick={() => setMatchingAlgorithm("clamped")}
-                  className={`flex-1 px-2.5 py-1.5 text-center text-[10px] sm:text-xs rounded font-bold transition cursor-pointer ${matchingAlgorithm === "clamped" ? "bg-[#ff7043] text-[#080808]" : "text-[#8c8779] hover:text-white"}`}
-                  title="Accurate multi-axis range-clamped coordinate matching (with midpoint distance tie-breaker)"
-                >
-                  Clamped Distance (Accurate)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMatchingAlgorithm("midpoint")}
-                  className={`flex-1 px-2.5 py-1.5 text-center text-[10px] sm:text-xs rounded font-bold transition cursor-pointer ${matchingAlgorithm === "midpoint" ? "bg-[#ff7043] text-[#080808]" : "text-[#8c8779] hover:text-white"}`}
-                  title="Straight-line distance approximation to range midpoint targets"
-                >
-                  Midpoint Distance (Experimental)
-                </button>
+
+              {/* Algorithm */}
+              <div className="bg-[#110c0c] border border-[#221313] p-1.5 rounded-lg flex flex-col justify-between gap-1 min-w-0 overflow-hidden">
+                <div className="flex items-center justify-between font-mono min-w-0">
+                  <label className="text-xs text-[#ff7043] font-bold uppercase tracking-wider block truncate">
+                    Matching Rule
+                  </label>
+                  <span className="text-[10px] text-[#70685c] truncate">
+                    {matchingAlgorithm === "clamped" ? "Nearest Boundary" : "Euclidean"}
+                  </span>
+                </div>
+                <div className="flex bg-[#050303] p-0.5 rounded border border-[#221313] text-xs font-mono min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => setMatchingAlgorithm("clamped")}
+                    className={`flex-1 px-1.5 py-0.5 text-center text-xs rounded font-bold transition cursor-pointer truncate ${matchingAlgorithm === "clamped" ? "bg-[#ff7043] text-[#080808]" : "text-[#8c8779] hover:text-white"}`}
+                    title="Accurate multi-axis range-clamped coordinate matching (with midpoint distance tie-breaker)"
+                  >
+                    Clamped (Real)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMatchingAlgorithm("midpoint")}
+                    className={`flex-1 px-1.5 py-0.5 text-center text-xs rounded font-bold transition cursor-pointer truncate ${matchingAlgorithm === "midpoint" ? "bg-[#ff7043] text-[#080808]" : "text-[#8c8779] hover:text-white"}`}
+                    title="Straight-line distance approximation to range midpoint targets"
+                  >
+                    Midpoint
+                  </button>
+                </div>
               </div>
-              <p className="text-[9px] text-[#70685c] leading-relaxed font-mono">
-                {matchingAlgorithm === "clamped" 
-                  ? "✓ Clamped: Axis distance is 0 inside bounds. Ties are resolved via scaled midpoint distance (×0.001)." 
-                  : "⚠ Midpoint: Standard straight-line distance to range centers, decoupled from baseRarity."}
-              </p>
             </div>
 
             {mapMode === "slice" ? (
-              <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+              <div className="grid grid-cols-2 gap-2 text-xs font-mono">
                 <div>
-                  <label className="text-[10px] text-[#70685c] block mb-1">X-Axis</label>
-                  <select 
-                    value={xAxisDim} 
-                    onChange={(e) => setXAxisDim(e.target.value)}
-                    className="w-full bg-[#110c0c] border border-[#221313] rounded p-1.5 text-white cursor-pointer"
-                  >
-                    <option value="temp">Temperature</option>
-                    <option value="hum">Humidity</option>
-                    <option value="cont">Continentalness</option>
-                    <option value="eros">Erosion</option>
-                    <option value="weird">Weirdness</option>
-                    <option value="depth">Depth</option>
-                  </select>
+                  <label className="text-xs text-[#ff7043] font-bold uppercase tracking-wider block mb-0.5">X-Axis</label>
+                  {/* THEME REMINDER: Dropdown styled with dark background and ember border */}
+                  <div className="relative">
+                    <select 
+                      value={xAxisDim} 
+                      onChange={(e) => setXAxisDim(e.target.value)}
+                      className="w-full appearance-none bg-[#0a0505] hover:bg-[#120a0a] border border-[#521c16] hover:border-[#ff7043]/60 focus:border-[#ff7043] focus:ring-1 focus:ring-[#ff7043] rounded-lg pl-2.5 pr-7 py-1 text-[#ffab91] text-xs font-mono cursor-pointer transition-colors shadow-sm focus:outline-none"
+                    >
+                      <option value="temp" className="bg-[#0c0808] text-[#e0d8cf]">Temperature</option>
+                      <option value="hum" className="bg-[#0c0808] text-[#e0d8cf]">Humidity</option>
+                      <option value="cont" className="bg-[#0c0808] text-[#e0d8cf]">Continentalness</option>
+                      <option value="eros" className="bg-[#0c0808] text-[#e0d8cf]">Erosion</option>
+                      <option value="weird" className="bg-[#0c0808] text-[#e0d8cf]">Weirdness</option>
+                      <option value="depth" className="bg-[#0c0808] text-[#e0d8cf]">Depth</option>
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 text-[#ff7043] absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
                 </div>
                 <div>
-                  <label className="text-[10px] text-[#70685c] block mb-1">Y-Axis</label>
-                  <select 
-                    value={yAxisDim} 
-                    onChange={(e) => setYAxisDim(e.target.value)}
-                    className="w-full bg-[#110c0c] border border-[#221313] rounded p-1.5 text-white cursor-pointer"
-                  >
-                    <option value="temp">Temperature</option>
-                    <option value="hum">Humidity</option>
-                    <option value="cont">Continentalness</option>
-                    <option value="eros">Erosion</option>
-                    <option value="weird">Weirdness</option>
-                    <option value="depth">Depth</option>
-                  </select>
+                  <label className="text-xs text-[#ff7043] font-bold uppercase tracking-wider block mb-0.5">Y-Axis</label>
+                  <div className="relative">
+                    <select 
+                      value={yAxisDim} 
+                      onChange={(e) => setYAxisDim(e.target.value)}
+                      className="w-full appearance-none bg-[#0a0505] hover:bg-[#120a0a] border border-[#521c16] hover:border-[#ff7043]/60 focus:border-[#ff7043] focus:ring-1 focus:ring-[#ff7043] rounded-lg pl-2.5 pr-7 py-1 text-[#ffab91] text-xs font-mono cursor-pointer transition-colors shadow-sm focus:outline-none"
+                    >
+                      <option value="temp" className="bg-[#0c0808] text-[#e0d8cf]">Temperature</option>
+                      <option value="hum" className="bg-[#0c0808] text-[#e0d8cf]">Humidity</option>
+                      <option value="cont" className="bg-[#0c0808] text-[#e0d8cf]">Continentalness</option>
+                      <option value="eros" className="bg-[#0c0808] text-[#e0d8cf]">Erosion</option>
+                      <option value="weird" className="bg-[#0c0808] text-[#e0d8cf]">Weirdness</option>
+                      <option value="depth" className="bg-[#0c0808] text-[#e0d8cf]">Depth</option>
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 text-[#ff7043] absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col gap-2.5 bg-[#110c0c] border border-[#221313] p-3 rounded-lg text-xs font-mono">
+              <div className="flex flex-col gap-1.5 bg-[#110c0c] border border-[#221313] p-2 rounded-lg text-xs font-mono">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] text-[#ff7043] block mb-1">Center X</label>
+                    <label className="text-xs text-[#ff7043] block mb-0.5 font-bold">Center X</label>
                     <input
                       type="number"
                       value={chunkbaseX}
                       onChange={(e) => setChunkbaseX(parseInt(e.target.value) || 0)}
-                      className="w-full bg-[#050303] border border-[#421b16] rounded p-1.5 text-white text-xs font-mono focus:border-[#ff7043] focus:outline-none"
+                      className="w-full bg-[#050303] border border-[#421b16] rounded px-2 py-0.5 text-white text-xs font-mono focus:border-[#ff7043] focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-[#ff7043] block mb-1">Center Z</label>
+                    <label className="text-xs text-[#ff7043] block mb-0.5 font-bold">Center Z</label>
                     <input
                       type="number"
                       value={chunkbaseZ}
                       onChange={(e) => setChunkbaseZ(parseInt(e.target.value) || 0)}
-                      className="w-full bg-[#050303] border border-[#421b16] rounded p-1.5 text-white text-xs font-mono focus:border-[#ff7043] focus:outline-none"
+                      className="w-full bg-[#050303] border border-[#421b16] rounded px-2 py-0.5 text-white text-xs font-mono focus:border-[#ff7043] focus:outline-none"
                     />
                   </div>
                 </div>
                 
-                <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-[#1f1313] text-[10px]">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#1f1313] text-xs">
                   <div className="flex gap-3">
-                    <label className="flex items-center gap-1 cursor-pointer select-none">
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-[#a4a090] hover:text-white transition">
                       <input
                         type="checkbox"
                         checked={showOceans}
                         onChange={(e) => setShowOceans(e.target.checked)}
-                        className="rounded accent-[#ff7043] cursor-pointer"
                       />
-                      Oceans
+                      <span>Oceans</span>
                     </label>
-                    <label className="flex items-center gap-1 cursor-pointer select-none">
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-[#a4a090] hover:text-white transition">
                       <input
                         type="checkbox"
                         checked={showRivers}
                         onChange={(e) => setShowRivers(e.target.checked)}
-                        className="rounded accent-[#ff7043] cursor-pointer"
                       />
-                      Rivers
+                      <span>Rivers</span>
                     </label>
                   </div>
+
                   
-                  <select
-                    value={chunkbaseZoom}
-                    onChange={(e) => setChunkbaseZoom(parseInt(e.target.value))}
-                    className="bg-[#050303] border border-[#421b16] rounded px-1.5 py-1 text-[#ff7043] text-[10px] cursor-pointer focus:outline-none"
-                  >
-                    <option value={128}>Zoom: 128 (Close)</option>
-                    <option value={512}>Zoom: 512 (Normal)</option>
-                    <option value={1024}>Zoom: 1024 (Wide)</option>
-                    <option value={2048}>Zoom: 2048 (World)</option>
-                  </select>
+                  {/* THEME REMINDER: Dropdowns must use #0a0505 background with #521c16 borders */}
+                  <div className="relative">
+                    <select
+                      value={chunkbaseZoom}
+                      onChange={(e) => setChunkbaseZoom(parseInt(e.target.value))}
+                      className="appearance-none bg-[#0a0505] hover:bg-[#120a0a] border border-[#521c16] hover:border-[#ff7043]/60 focus:border-[#ff7043] focus:ring-1 focus:ring-[#ff7043] rounded-lg pl-2 pr-6 py-0.5 text-[#ff7043] text-xs font-mono cursor-pointer transition-colors shadow-sm focus:outline-none"
+                    >
+                      <option value={128} className="bg-[#0c0808] text-[#e0d8cf]">Zoom: 128 (Close)</option>
+                      <option value={512} className="bg-[#0c0808] text-[#e0d8cf]">Zoom: 512 (Normal)</option>
+                      <option value={1024} className="bg-[#0c0808] text-[#e0d8cf]">Zoom: 1024 (Wide)</option>
+                      <option value={2048} className="bg-[#0c0808] text-[#e0d8cf]">Zoom: 2048 (World)</option>
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 text-[#ff7043] absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
                 </div>
               </div>
             )}
 
             {/* Canvas Frame */}
-            <div className="flex flex-col items-center justify-center bg-[#050303] rounded-xl border border-[#1f1313] p-3.5 relative select-none overflow-hidden">
+            <div className="flex flex-col items-center justify-center bg-[#050303] rounded-xl border border-[#1f1313] p-1.5 relative select-none overflow-hidden">
               {mapMode === "chunkbase" ? (
                 <>
-                  <div className="absolute top-1.5 left-2 text-[8px] text-[#4d322f] font-mono pointer-events-none">
+                  <div className="absolute top-1 left-2 text-[10px] text-[#4d322f] font-mono pointer-events-none">
                     X: {Math.round(chunkbaseX - chunkbaseZoom / 2)} <br />
                     Z: {Math.round(chunkbaseZ - chunkbaseZoom / 2)}
                   </div>
-                  <div className="absolute top-1.5 right-2 text-[8px] text-[#4d322f] font-mono text-right pointer-events-none">
+                  <div className="absolute top-1 right-2 text-[10px] text-[#4d322f] font-mono text-right pointer-events-none">
                     X: {Math.round(chunkbaseX + chunkbaseZoom / 2)} <br />
                     Z: {Math.round(chunkbaseZ - chunkbaseZoom / 2)}
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="absolute top-1 right-2 text-[8px] text-[#4d322f] font-mono">
+                  <div className="absolute top-1 right-2 text-[10px] text-[#4d322f] font-mono">
                     Y-Axis ({yAxisDim.toUpperCase()})
                   </div>
-                  <div className="absolute bottom-1 left-2 text-[8px] text-[#4d322f] font-mono">
+                  <div className="absolute bottom-1 left-2 text-[10px] text-[#4d322f] font-mono">
                     X-Axis ({xAxisDim.toUpperCase()})
                   </div>
                 </>
@@ -1996,76 +2102,76 @@ export default function App() {
               
               <canvas 
                 ref={canvasRef} 
-                width={512} 
-                height={512}
+                width={400} 
+                height={400}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseLeave}
-                className={`rounded-lg shadow-2xl max-w-full max-h-full aspect-square border border-[#120808] transition select-none ${mapMode === "chunkbase" ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"}`}
+                className={`rounded-lg shadow-2xl w-full max-w-[340px] aspect-square border border-[#120808] transition select-none ${mapMode === "chunkbase" ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"}`}
               />
 
               {mapMode === "chunkbase" && (
-                <div className="w-full flex items-center justify-between text-[9px] font-mono text-[#5c4a47] mt-2 px-1">
-                  <span className="flex items-center gap-0.5">
-                    <Move className="h-2.5 w-2.5 text-[#ff7043]" />
+                <div className="w-full flex items-center justify-between text-xs font-mono text-[#5c4a47] mt-1 px-1 max-w-[340px]">
+                  <span className="flex items-center gap-1">
+                    <Move className="h-3 w-3 text-[#ff7043]" />
                     Drag to scroll
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <button onClick={() => { setChunkbaseX(0); setChunkbaseZ(0); }} className="px-1.5 py-0.5 bg-[#120808] border border-[#2d1715] hover:border-[#ff7043] rounded text-[#ff7043] cursor-pointer">Spawn (0,0)</button>
-                    <button onClick={() => setChunkbaseZoom(prev => Math.max(128, prev / 2))} className="p-0.5 bg-[#120808] border border-[#2d1715] hover:border-[#ff7043] rounded text-white cursor-pointer"><ZoomIn className="h-2.5 w-2.5" /></button>
-                    <button onClick={() => setChunkbaseZoom(prev => Math.min(4096, prev * 2))} className="p-0.5 bg-[#120808] border border-[#2d1715] hover:border-[#ff7043] rounded text-white cursor-pointer"><ZoomOut className="h-2.5 w-2.5" /></button>
+                    <button onClick={() => { setChunkbaseX(0); setChunkbaseZ(0); }} className="px-1.5 py-0.5 bg-[#120808] border border-[#2d1715] hover:border-[#ff7043] rounded text-[#ff7043] cursor-pointer text-xs">Spawn (0,0)</button>
+                    <button onClick={() => setChunkbaseZoom(prev => Math.max(128, prev / 2))} className="p-0.5 bg-[#120808] border border-[#2d1715] hover:border-[#ff7043] rounded text-white cursor-pointer"><ZoomIn className="h-3 w-3" /></button>
+                    <button onClick={() => setChunkbaseZoom(prev => Math.min(4096, prev * 2))} className="p-0.5 bg-[#120808] border border-[#2d1715] hover:border-[#ff7043] rounded text-white cursor-pointer"><ZoomOut className="h-3 w-3" /></button>
                   </span>
                 </div>
               )}
             </div>
 
             {/* Hover Tooltip / Inspect Details */}
-            <div className="bg-[#050303] border border-[#1c1212] rounded-xl p-3">
+            <div className="bg-[#050303] border border-[#1c1212] rounded-xl p-2.5">
               {hoveredCoords ? (
-                <div className="flex flex-col gap-2 font-mono">
-                  <div className="flex items-center justify-between border-b border-[#221313] pb-1.5">
-                    <span className="text-[10px] text-[#ff7043]">
+                <div className="flex flex-col gap-1.5 font-mono">
+                  <div className="flex items-center justify-between border-b border-[#221313] pb-1">
+                    <span className="text-xs text-[#ff7043] font-bold">
                       {mapMode === "chunkbase" ? `Block X: ${hoveredCoords.x}, Z: ${hoveredCoords.z}` : `Coords X: ${hoveredCoords.x}, Y: ${hoveredCoords.z}`}
                     </span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full inline-block animate-pulse" style={{ backgroundColor: hoveredCoords.biomeColor || "#1e1e1e" }} />
-                      <span className="text-xs font-bold text-white uppercase">{hoveredCoords.biomeName}</span>
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className="w-2 h-2 rounded-full inline-block animate-pulse shrink-0" style={{ backgroundColor: hoveredCoords.biomeColor || "#1e1e1e" }} />
+                      <span className="text-xs font-bold text-white uppercase truncate">{hoveredCoords.biomeName}</span>
                     </div>
                   </div>
-                  <div className="grid grid-cols-6 gap-1 text-center text-[10px]">
+                  <div className="grid grid-cols-6 gap-1 text-center text-xs">
                     <div className="bg-[#0f0a0a] p-1 rounded border border-[#221313]">
-                      <span className="text-[8px] text-[#ff8a65] block">T</span>
+                      <span className="text-[10px] text-[#ff8a65] block font-bold">T</span>
                       <span className="font-bold text-white">{hoveredCoords.t.toFixed(2)}</span>
                     </div>
                     <div className="bg-[#0f0a0a] p-1 rounded border border-[#221313]">
-                      <span className="text-[8px] text-[#4db6ac] block">H</span>
+                      <span className="text-[10px] text-[#4db6ac] block font-bold">H</span>
                       <span className="font-bold text-white">{hoveredCoords.h.toFixed(2)}</span>
                     </div>
                     <div className="bg-[#0f0a0a] p-1 rounded border border-[#221313]">
-                      <span className="text-[8px] text-[#9ccc65] block">C</span>
+                      <span className="text-[10px] text-[#9ccc65] block font-bold">C</span>
                       <span className="font-bold text-white">{hoveredCoords.c.toFixed(2)}</span>
                     </div>
                     <div className="bg-[#0f0a0a] p-1 rounded border border-[#221313]">
-                      <span className="text-[8px] text-[#64b5f6] block">E</span>
+                      <span className="text-[10px] text-[#64b5f6] block font-bold">E</span>
                       <span className="font-bold text-white">{hoveredCoords.e.toFixed(2)}</span>
                     </div>
                     <div className="bg-[#0f0a0a] p-1 rounded border border-[#221313]">
-                      <span className="text-[8px] text-[#ba68c8] block">W</span>
+                      <span className="text-[10px] text-[#ba68c8] block font-bold">W</span>
                       <span className="font-bold text-white">{hoveredCoords.w.toFixed(2)}</span>
                     </div>
                     <div className="bg-[#0f0a0a] p-1 rounded border border-[#221313]">
-                      <span className="text-[8px] text-sky-400 block">D</span>
+                      <span className="text-[10px] text-sky-400 block font-bold">D</span>
                       <span className="font-bold text-white">{hoveredCoords.d.toFixed(2)}</span>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between text-[9px] text-[#8c8779] border-t border-[#221313] pt-1">
+                  <div className="flex items-center justify-between text-xs text-[#8c8779] border-t border-[#221313] pt-1">
                     <span>Similarity: <strong className="text-white">{hoveredCoords.similarity.toFixed(1)}%</strong></span>
                     <span>Distance Score: <strong className="text-white">{hoveredCoords.distance.toFixed(3)}</strong></span>
                   </div>
                 </div>
               ) : (
-                <div className="text-center text-xs text-[#70685c] italic py-2 font-mono">
+                <div className="text-center text-xs text-[#70685c] italic py-1 font-mono">
                   * Hover cursor or drag over map to analyze climate values
                 </div>
               )}
@@ -2073,59 +2179,59 @@ export default function App() {
           </div>
 
           {/* ACTIVE POINT CLIMATE QUERY RESULTS (6D DISTANCE MATCHING) */}
-          <div className="bg-[#0c0808] border border-[#1c1212] rounded-xl p-4 sm:p-5 flex flex-col gap-4">
+          <div className="bg-[#0c0808] border border-[#1c1212] rounded-xl p-2.5 sm:p-3 flex flex-col gap-2">
             <div>
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                 <Activity className="h-4 w-4 text-[#ff7043]" />
-                Climate Query Diagnostics
+                Climate Diagnostics
               </h3>
-              <p className="text-[11px] text-[#8c8779] mt-0.5">
-                Displays real-time proximity and distance resolution across all biomes based on Noise Router coordinates.
+              <p className="text-xs text-[#8c8779] mt-0.5">
+                Real-time 6D coordinate distance resolution across all biomes.
               </p>
             </div>
 
             {/* Best Match Hero Card */}
             {matchingResults.best && (
-              <div className="bg-[#120a08] border border-[#522019] p-4 rounded-xl flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-lg border-2 border-dashed border-white/20 shrink-0 flex items-center justify-center font-bold text-white text-lg shadow" style={{ backgroundColor: matchingResults.best.biome.color }}>
-                    ★
+              <div className="bg-[#120a08] border border-[#522019] p-2 rounded-xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 truncate">
+                  <div className="w-9 h-9 rounded-lg border border-white/20 shrink-0 flex items-center justify-center font-bold text-white shadow" style={{ backgroundColor: matchingResults.best.biome.color }}>
+                    <Sparkles className="h-4 w-4 text-white" />
                   </div>
-                  <div>
-                    <span className="text-[8px] bg-[#521c15] text-[#ff7043] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider font-mono">Best Match</span>
-                    <h4 className="text-base font-extrabold text-white mt-0.5 font-mono">{matchingResults.best.biome.name}</h4>
-                    <p className="text-xs text-[#8c8779] mt-0.5 max-w-sm line-clamp-1">{matchingResults.best.biome.description}</p>
+                  <div className="truncate">
+                    <span className="text-[10px] bg-[#521c15] text-[#ff7043] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider font-mono">Best Match</span>
+                    <h4 className="text-sm font-extrabold text-white mt-0.5 font-mono truncate">{matchingResults.best.biome.name}</h4>
+                    <p className="text-xs text-[#8c8779] max-w-xs truncate">{matchingResults.best.biome.description}</p>
                   </div>
                 </div>
                 <div className="text-right font-mono shrink-0">
-                  <span className="text-xs text-[#8c8779] block">Fit Accuracy</span>
-                  <span className="text-xl font-black text-emerald-400 block">{matchingResults.best.similarity.toFixed(1)}%</span>
+                  <span className="text-[10px] text-[#8c8779] block">Fit Accuracy</span>
+                  <span className="text-base font-black text-emerald-400 block">{matchingResults.best.similarity.toFixed(1)}%</span>
                   <span className="text-[10px] text-[#70685c] block">Dist: {matchingResults.best.distance.toFixed(4)}</span>
                 </div>
               </div>
             )}
 
             {/* Top 10 Closest List */}
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[10px] text-[#ff7043] font-mono uppercase tracking-wider font-bold block mb-1">Top 10 Closest Dimension Biomes:</span>
-              <div className="flex flex-col gap-1 max-h-56 overflow-y-auto pr-1">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-[#ff7043] font-mono uppercase tracking-wider font-bold block">Top 10 Closest Dimension Biomes:</span>
+              <div className="flex flex-col gap-1 max-h-36 overflow-y-auto pr-1">
                 {matchingResults.topMatches.map((match, idx) => (
                   <div 
                     key={match.biome.id}
                     onClick={() => setSelectedBiomeId(match.biome.id)}
-                    className="flex items-center justify-between p-2 rounded bg-[#0d0909] border border-[#1f1313] hover:border-[#ff7043]/30 transition cursor-pointer"
+                    className="flex items-center justify-between p-1 rounded bg-[#0d0909] border border-[#1f1313] hover:border-[#ff7043]/30 transition cursor-pointer"
                   >
-                    <div className="flex items-center gap-2 truncate">
-                      <span className="text-[10px] font-mono text-[#70685c] w-4 text-right">#{idx + 1}</span>
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: match.biome.color }} />
+                    <div className="flex items-center gap-1.5 truncate flex-1 min-w-0 pr-2">
+                      <span className="text-[10px] font-mono text-[#70685c] w-3.5 text-right shrink-0">#{idx + 1}</span>
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: match.biome.color }} />
                       <span className="text-xs text-white font-bold font-mono truncate">{match.biome.name}</span>
-                      <span className="text-[9px] bg-[#110c0c] text-[#70685c] font-mono px-1.5 py-0.5 rounded">
-                        Region #{match.matchedPointIdx + 1}
+                      <span className="text-[10px] bg-[#110c0c] text-[#70685c] font-mono px-1 py-0.2 rounded shrink-0">
+                        R#{match.matchedPointIdx + 1}
                       </span>
                     </div>
-                    <div className="flex items-center gap-4 font-mono text-[11px] shrink-0">
-                      <span className="text-[#8c8779]">Dist: <strong className="text-white">{match.distance.toFixed(3)}</strong></span>
-                      <span className={`font-bold w-12 text-right ${match.similarity > 75 ? "text-emerald-400" : match.similarity > 40 ? "text-sky-400" : "text-[#8c8779]"}`}>
+                    <div className="flex items-center gap-2.5 font-mono text-xs shrink-0">
+                      <span className="text-[#8c8779] whitespace-nowrap">Dist: <strong className="text-white">{match.distance.toFixed(3)}</strong></span>
+                      <span className={`font-bold w-9 text-right ${match.similarity > 75 ? "text-emerald-400" : match.similarity > 40 ? "text-sky-400" : "text-[#8c8779]"}`}>
                         {match.similarity.toFixed(0)}%
                       </span>
                     </div>
@@ -2140,13 +2246,303 @@ export default function App() {
       </main>
 
       {/* FOOTER STATS SECTION */}
-      <footer className="border-t border-[#1c1212] bg-[#0c0808] py-4 px-6 text-center text-xs text-[#70685c] shrink-0">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 font-mono">
-          <span>© 2026 Mojang AB. Minecraft and worldgen variables are registered trademarks.</span>
-          <span>Designed with high-contrast, fully responsive UI. Total biomes compiled: 58</span>
+      <footer className="border-t border-[#1c1212] bg-[#0c0808] py-2 px-4 text-center text-xs text-[#70685c] shrink-0">
+        <div className="max-w-[1700px] mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 font-mono">
+          <div className="flex items-center justify-center sm:justify-start gap-1">
+            {/* SECRET BUTTON: Hidden in plain sight on the copyright glyph */}
+            <button
+              type="button"
+              onClick={() => setShowStatsModal(true)}
+              className="text-[#70685c] hover:text-[#ff7043] transition-colors cursor-pointer select-none"
+              title="Matrix Diagnostics & Telemetry"
+            >
+              ©
+            </button>
+            <span>2026 Mojang AB. Minecraft and worldgen variables are registered trademarks.</span>
+          </div>
+          <div className="flex items-center justify-center sm:justify-end gap-2">
+            <span>Precision 6D Multi-Noise matrix with optimized rendering and responsive layout.</span>
+            {/* SECRET BUTTON: Subtle status indicator */}
+            <button
+              type="button"
+              onClick={() => setShowStatsModal(true)}
+              className="text-[11px] text-[#42221e] hover:text-[#ff7043] transition-colors cursor-pointer"
+              title="Visitor Analytics & Telemetry"
+            >
+              [stats]
+            </button>
+          </div>
         </div>
       </footer>
 
+      {/* HELP NOTE MODAL: Clean, themed modal with NO emojis & Escape key close */}
+      <AnimatePresence>
+        {showHelpNoteModal && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/80 backdrop-blur-sm cursor-pointer"
+            onClick={() => setShowHelpNoteModal(false)}
+          >
+            <div 
+              className="bg-[#0c0808] border border-[#521c16] rounded-xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl flex flex-col gap-4 max-h-[85vh] overflow-y-auto text-[#a4a090] font-mono cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-[#221313] pb-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-[#ff7043]" />
+                  <h3 className="text-base font-bold text-white">Backwoods Biome Calculator Help Notes</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowHelpNoteModal(false)}
+                  className="p-1 rounded bg-[#160b0a] border border-[#301614] hover:border-[#ff7043] text-[#ff7043] hover:text-white transition cursor-pointer"
+                  title="Close help note (Esc)"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="flex flex-col gap-3 text-xs leading-relaxed">
+                <div className="bg-[#110c0c] border border-[#221313] p-3 rounded-lg">
+                  <h4 className="text-sm font-bold text-[#ff7043] uppercase mb-1">1. 6D Multi-Noise Parameters</h4>
+                  <p className="text-[#c4beaf] mb-2">
+                    Minecraft 1.18+ and Backwoods use six continuous noise channels to position biomes across coordinate space:
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-[#8c8779]">
+                    <li><strong className="text-[#ff8a65]">Temperature:</strong> Cold / frozen (-1.0) to hot / arid (+1.0).</li>
+                    <li><strong className="text-[#4db6ac]">Humidity:</strong> Arid / dry (-1.0) to dense vegetation / swamp (+1.0).</li>
+                    <li><strong className="text-[#9ccc65]">Continentalness:</strong> Deep oceans (-1.0) to coast (0.0) to far inland (+1.0).</li>
+                    <li><strong className="text-[#64b5f6]">Erosion:</strong> Sharp mountain peaks (-1.0) to flat river valleys (+1.0).</li>
+                    <li><strong className="text-[#ba68c8]">Weirdness:</strong> Common standard variants (-0.5 to +0.5) to rare anomalous peaks (+1.0).</li>
+                    <li><strong className="text-sky-400">Depth:</strong> Surface / sky (+0.0 to +1.0) vs deep underground (-1.5 to -0.5).</li>
+                  </ul>
+                </div>
+
+                <div className="bg-[#110c0c] border border-[#221313] p-3 rounded-lg">
+                  <h4 className="text-sm font-bold text-[#4db6ac] uppercase mb-1">2. Matching Rules</h4>
+                  <p className="text-[#c4beaf]">
+                    <strong className="text-white">Clamped (Real):</strong> Matches biomes by clamping coordinates to range boundaries, simulating true multi-box placement.<br />
+                    <strong className="text-white">Midpoint:</strong> Fast Euclidean straight-line distance approximation to region centers.
+                  </p>
+                </div>
+
+                <div className="bg-[#110c0c] border border-[#221313] p-3 rounded-lg">
+                  <h4 className="text-sm font-bold text-[#9ccc65] uppercase mb-1">3. MCreator Export & Sandbox Customization</h4>
+                  <p className="text-[#c4beaf]">
+                    Use the <em>MCreator Parameter Exporter</em> accordion below the sliders to click-to-copy exact min and max bounds for your MCreator workspace JSON. You can also select the <em>Custom Sandbox</em> dimension to create and tune your own biomes with persistent local storage.
+                  </p>
+                </div>
+
+                <div className="bg-[#1a0c0c] border border-[#521c16] p-3 rounded-lg text-xs">
+                  <h4 className="text-sm font-bold text-[#ff7043] uppercase mb-1">4. Repository & Deployment Reminders</h4>
+                  <p className="text-[#c4beaf]">
+                    Never delete <code className="text-[#ffab91]">.github/workflows/deploy.yml</code>. It is mandatory for GitHub Pages deployment. Always ensure dropdowns and buttons follow the app's dark ember theme.
+                  </p>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="border-t border-[#221313] pt-3 flex justify-between items-center text-xs text-[#70685c]">
+                <span>Press <kbd className="px-1.5 py-0.5 bg-[#1a0f0e] border border-[#521c16] rounded text-[#ff7043]">Esc</kbd> to close</span>
+                <button
+                  type="button"
+                  onClick={() => setShowHelpNoteModal(false)}
+                  className="px-4 py-1.5 bg-[#ff7043] hover:bg-[#ff8a65] text-[#080808] font-bold text-xs rounded transition cursor-pointer"
+                >
+                  Close Help Notes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* STATS MODAL: Visitor tracking & device opt-out window (Backwoods-Wiki pattern) */}
+      <AnimatePresence>
+        {showStatsModal && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/85 backdrop-blur-md cursor-pointer"
+            onClick={() => setShowStatsModal(false)}
+          >
+            <div 
+              className="bg-[#0c0808] border border-[#521c16] rounded-xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl flex flex-col gap-4 max-h-[88vh] overflow-y-auto text-[#a4a090] font-mono cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-[#221313] pb-3">
+                <div className="flex items-center gap-2.5">
+                  <BarChart2 className="h-5 w-5 text-[#ff7043]" />
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      Visitor Analytics & Telemetry
+                      <span className="flex items-center gap-1.5 text-[10px] bg-[#121f15] text-[#81c784] px-2 py-0.5 rounded border border-[#204928]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Live Firestore
+                      </span>
+                    </h3>
+                    <p className="text-xs text-[#8c8779]">Real-time visitor counts and device telemetry controls</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowStatsModal(false)}
+                  className="p-1 rounded bg-[#160b0a] border border-[#301614] hover:border-[#ff7043] text-[#ff7043] hover:text-white transition cursor-pointer"
+                  title="Close analytics (Esc)"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Status Alert Banner if updated */}
+              {trackingNotice && (
+                <div className="bg-[#1f1110] border border-[#ff7043] text-[#ffab91] px-3 py-2 rounded-lg text-xs flex items-center gap-2 animate-fadeIn">
+                  <CheckCircle2 className="h-4 w-4 text-[#ff7043] shrink-0" />
+                  <span>{trackingNotice}</span>
+                </div>
+              )}
+
+              {/* Analytics Key Metrics Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="bg-[#110c0c] border border-[#221313] p-2.5 rounded-lg flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-[#8c8779] text-xs">
+                    <span>Total Views</span>
+                    <TrendingUp className="h-3.5 w-3.5 text-[#ff7043]" />
+                  </div>
+                  <span className="text-lg font-bold text-white mt-1">{analytics.totalVisits}</span>
+                  <span className="text-[10px] text-[#70685c]">All-time page loads</span>
+                </div>
+
+                <div className="bg-[#110c0c] border border-[#221313] p-2.5 rounded-lg flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-[#8c8779] text-xs">
+                    <span>Unique Users</span>
+                    <Users className="h-3.5 w-3.5 text-[#4db6ac]" />
+                  </div>
+                  <span className="text-lg font-bold text-white mt-1">{analytics.uniqueVisitors}</span>
+                  <span className="text-[10px] text-[#70685c]">Distinct browser profiles</span>
+                </div>
+
+                <div className="bg-[#110c0c] border border-[#221313] p-2.5 rounded-lg flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-[#8c8779] text-xs">
+                    <span>Today</span>
+                    <Clock className="h-3.5 w-3.5 text-[#9ccc65]" />
+                  </div>
+                  <span className="text-lg font-bold text-white mt-1">{analytics.todayVisits}</span>
+                  <span className="text-[10px] text-[#70685c]">Active sessions today</span>
+                </div>
+
+                <div className="bg-[#110c0c] border border-[#221313] p-2.5 rounded-lg flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-[#8c8779] text-xs">
+                    <span>This Device</span>
+                    {trackingOptedOut ? (
+                      <EyeOff className="h-3.5 w-3.5 text-rose-400" />
+                    ) : (
+                      <Eye className="h-3.5 w-3.5 text-emerald-400" />
+                    )}
+                  </div>
+                  <span className={`text-xs font-bold mt-1 ${trackingOptedOut ? "text-rose-400" : "text-emerald-400"}`}>
+                    {trackingOptedOut ? "Opted Out" : "Tracking Active"}
+                  </span>
+                  <span className="text-[10px] text-[#70685c]">
+                    {trackingOptedOut ? "Excluded from stats" : "Logged in Firestore"}
+                  </span>
+                </div>
+              </div>
+
+              {/* PRIVACY CONTROL BOX: DOUBLE-CLICK TO STOP TRACKING DEVICE */}
+              <div className="bg-[#140a09] border border-[#521c16] p-3 sm:p-4 rounded-xl flex flex-col gap-2.5">
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-[#ff7043]" />
+                    <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
+                      Device Privacy & Opt-Out Control
+                    </h4>
+                  </div>
+                  <span className="text-[10px] bg-[#221010] text-[#ff8a65] px-2 py-0.5 rounded border border-[#521313]">
+                    Security Protocol
+                  </span>
+                </div>
+
+                <p className="text-xs text-[#c4beaf] leading-relaxed">
+                  To protect your privacy or exclude developer/author visits from community metrics, you can stop tracking this device.
+                </p>
+
+                {/* DOUBLE-CLICK ACTION BUTTON */}
+                <div className="flex flex-col gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onDoubleClick={handleToggleDeviceTracking}
+                    className={`w-full py-2.5 px-3 rounded-lg font-mono font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer select-none border shadow-md ${
+                      trackingOptedOut
+                        ? "bg-[#142914] hover:bg-[#1b381b] text-emerald-300 border-[#235e23]"
+                        : "bg-[#240e0b] hover:bg-[#331410] text-[#ff7043] hover:text-[#ff8a65] border-[#732219]"
+                    }`}
+                    title="Double-click to stop or resume tracking your device"
+                  >
+                    <MousePointerClick className="h-4 w-4 shrink-0" />
+                    {trackingOptedOut
+                      ? "Double-Click to Re-enable Tracking for This Device"
+                      : "Double-Click to Stop Tracking My Device"}
+                  </button>
+                  <p className="text-[10px] text-[#70685c] text-center">
+                    Note: A fast <strong className="text-[#a4a090]">double-click</strong> is strictly required to prevent accidental toggling.
+                  </p>
+                </div>
+              </div>
+
+              {/* RECENT SESSION LOG TABLE */}
+              <div className="bg-[#110c0c] border border-[#221313] p-3 rounded-xl flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-[#ff7043] uppercase tracking-wider flex items-center gap-1.5">
+                    <Laptop className="h-3.5 w-3.5 text-[#ff7043]" />
+                    Recent Recorded Sessions
+                  </h4>
+                  <span className="text-[10px] text-[#70685c]">Last {analytics.records.length} entries</span>
+                </div>
+
+                <div className="divide-y divide-[#1f1313] max-h-40 overflow-y-auto pr-1">
+                  {analytics.records.length === 0 ? (
+                    <div className="py-4 text-center text-xs text-[#70685c]">
+                      {trackingOptedOut
+                        ? "Device tracking is stopped. Double-click above to re-enable logging."
+                        : "Waiting for first live visitor session..."}
+                    </div>
+                  ) : (
+                    analytics.records.map((rec) => (
+                      <div key={rec.id} className="py-1.5 flex items-center justify-between text-xs font-mono">
+                        <div className="flex items-center gap-2 truncate pr-2">
+                          <span className="text-[#70685c] text-[10px] w-12 shrink-0">{rec.timestamp}</span>
+                          <span className="text-white truncate">{rec.device}</span>
+                          {rec.isCurrentDevice && (
+                            <span className="text-[9px] bg-[#221010] text-[#ff7043] border border-[#521313] px-1 py-0.2 rounded font-bold shrink-0">
+                              YOU
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[#8c8779] text-[10px] shrink-0">{rec.resolution}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="border-t border-[#221313] pt-3 flex justify-between items-center text-xs text-[#70685c]">
+                <span>Press <kbd className="px-1.5 py-0.5 bg-[#1a0f0e] border border-[#521c16] rounded text-[#ff7043]">Esc</kbd> to close</span>
+                <button
+                  type="button"
+                  onClick={() => setShowStatsModal(false)}
+                  className="px-4 py-1.5 bg-[#ff7043] hover:bg-[#ff8a65] text-[#080808] font-bold text-xs rounded transition cursor-pointer"
+                >
+                  Close Analytics
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
+
   );
 }

@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "VisitorStats": {
+      "title": "VisitorStats",
+      "description": "Aggregated visitor count statistics",
+      "type": "object",
+      "properties": {
+        "totalVisits": {
+          "type": "number",
+          "description": "Total site visits recorded"
+        },
+        "uniqueVisitors": {
+          "type": "number",
+          "description": "Unique visitor identifiers"
+        },
+        "todayVisits": {
+          "type": "number",
+          "description": "Visits recorded today"
+        },
+        "lastDate": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "YYYY-MM-DD tracking bucket for daily reset"
+        },
+        "updatedAt": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "ISO timestamp of last update"
+        }
+      },
+      "required": ["totalVisits", "uniqueVisitors", "todayVisits", "lastDate", "updatedAt"]
+    },
+    "VisitorSession": {
+      "title": "VisitorSession",
+      "description": "Log of an individual visitor interaction session",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Unique session ID"
+        },
+        "visitorId": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Hashed or pseudonymous visitor ID"
+        },
+        "device": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Device category"
+        },
+        "browser": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Browser name"
+        },
+        "os": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Operating system"
+        },
+        "screen": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Display resolution"
+        },
+        "referrer": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "Referrer URL or direct"
+        },
+        "path": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Application route or path"
+        },
+        "isFirstVisit": {
+          "type": "boolean",
+          "description": "True if first time visitor"
+        },
+        "timestamp": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "ISO timestamp of visit"
+        }
+      },
+      "required": ["sessionId", "visitorId", "device", "browser", "os", "screen", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/visitor_stats/{statId}": {
+      "schema": "VisitorStats",
+      "description": "Global and partitioned visitor counters"
+    },
+    "/visitor_sessions/{sessionId}": {
+      "schema": "VisitorSession",
+      "description": "Real-time stream of visitor sessions"
+    }
+  }
+}

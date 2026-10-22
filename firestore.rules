@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidVisitorStats(data) {
+      return data.keys().hasAll(['totalVisits', 'uniqueVisitors', 'todayVisits', 'lastDate', 'updatedAt'])
+        && data.totalVisits is number
+        && data.uniqueVisitors is number
+        && data.todayVisits is number
+        && data.lastDate is string && data.lastDate.size() <= 32
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidVisitorSession(data) {
+      return data.keys().hasAll(['sessionId', 'visitorId', 'device', 'browser', 'os', 'screen', 'timestamp'])
+        && data.sessionId is string && data.sessionId.size() <= 64
+        && data.visitorId is string && data.visitorId.size() <= 64
+        && data.device is string && data.device.size() <= 32
+        && data.browser is string && data.browser.size() <= 32
+        && data.os is string && data.os.size() <= 32
+        && data.screen is string && data.screen.size() <= 32
+        && data.timestamp is string && data.timestamp.size() <= 64;
+    }
+
+    match /visitor_stats/{statId} {
+      allow read: if isValidId(statId);
+      allow create, update: if isValidId(statId) && isValidVisitorStats(request.resource.data);
+      allow delete: if false;
+    }
+
+    match /visitor_sessions/{sessionId} {
+      allow read: if isValidId(sessionId);
+      allow list: if true;
+      allow create: if isValidId(sessionId) && isValidVisitorSession(request.resource.data);
+      allow update, delete: if false;
+    }
+  }
+}
